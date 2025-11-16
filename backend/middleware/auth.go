@@ -32,6 +32,19 @@ func AuthMiddleware(authService *services.AuthService) gin.HandlerFunc {
 		}
 
 		token := parts[1]
+		isBlacklisted, err := authService.IsTokenBlacklisted(token)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify token"})
+			c.Abort()
+			return
+		}
+
+		if isBlacklisted {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token has been revoked"})
+			c.Abort()
+			return
+		}
+
 		user, err := authService.ValidateToken(token)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{

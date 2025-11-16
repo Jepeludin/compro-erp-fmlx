@@ -14,15 +14,17 @@ import (
 
 // AuthService handles authentication business logic
 type AuthService struct {
-	userRepo *repository.UserRepository
-	config   *config.Config
+	userRepo      *repository.UserRepository
+	blacklistRepo *repository.TokenBlacklistRepository
+	config        *config.Config
 }
 
 // NewAuthService creates a new AuthService
-func NewAuthService(userRepo *repository.UserRepository, cfg *config.Config) *AuthService {
+func NewAuthService(userRepo *repository.UserRepository, blacklistRepo *repository.TokenBlacklistRepository, cfg *config.Config) *AuthService {
 	return &AuthService{
-		userRepo: userRepo,
-		config:   cfg,
+		userRepo:      userRepo,
+		blacklistRepo: blacklistRepo,
+		config:        cfg,
 	}
 }
 
@@ -86,8 +88,8 @@ func (s *AuthService) generateToken(user *models.User) (string, error) {
 
 // RegisterRequest represents the registration request payload
 type RegisterRequest struct {
-	Username string `json:"username" binding:"required,min=3,max=50"` // e.g., BAYU
 	UserID   string `json:"user_id" binding:"required"`               // e.g., PI0824.2374
+	Username string `json:"username" binding:"required,min=3,max=50"` // e.g., BAYU
 	Password string `json:"password" binding:"required,min=4"`        // Password (will be hashed)
 	Role     string `json:"role" binding:"required"`                  // Admin, PPIC, etc.
 	Operator string `json:"operator"`                                 // Operator field
@@ -148,4 +150,40 @@ func (s *AuthService) ValidateToken(tokenString string) (*models.User, error) {
 	}
 
 	return nil, errors.New("invalid token")
+}
+
+func (s *AuthService) Logout(tokenString string) error {
+
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("invalid signing method")
+		}
+		return []byte(s.config.JWTSecret), nil
+	})
+
+	if err != nil {
+		return errors.New("invalid token")
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || !token.Valid {
+		return errors.New("invalid token claims")
+	}
+
+	exp, ok := claims["exp"].(float64)
+	if !ok {
+		return errors.New("invalid expiration time")
+	}
+
+	expiresAt := time.Unix(int64(exp), 0)
+
+	if err := s.blacklistRepo.AddToBlacklist(tokenString, expiresAt); err != nil {
+		return errors.New("failed to logout")
+	}
+
+	return nil
+}
+
+func (s *AuthService) IsTokenBlacklisted(tokenString string) (bool, error) {
+	return s.blacklistRepo.IsBlacklisted(tokenString)
 }

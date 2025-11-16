@@ -27,24 +27,21 @@ func (User) TableName() string {
 
 // UserResponse represents the user data returned in API responses
 type UserResponse struct {
-	ID        uint      `json:"id"`
-	Username  string    `json:"username"`
-	UserID    string    `json:"user_id"`
-	Role      string    `json:"role"`
-	Operator  string    `json:"operator"`
-	IsActive  bool      `json:"is_active"`
-	CreatedAt time.Time `json:"created_at"`
+	Username string `json:"username"`
+	UserID   string `json:"user_id"`
+	Role     string `json:"role"`
+	Operator string `json:"operator"`
+	IsActive bool   `json:"is_active"`
 }
 
 // ToResponse converts User to UserResponse
 func (u *User) ToResponse() UserResponse {
 	return UserResponse{
-		ID:        u.ID,
-		Username:  u.Username,
-		UserID:    u.UserID,
-		Role:      u.Role,
-		Operator:  u.Operator,
-		IsActive:  u.IsActive,
-		CreatedAt: u.CreatedAt,
+
+		Username: u.Username,
+		UserID:   u.UserID,
+		Role:     u.Role,
+		Operator: u.Operator,
+		IsActive: u.IsActive,
 	}
 }

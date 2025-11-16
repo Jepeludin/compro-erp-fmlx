@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"ganttpro-backend/services"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -86,8 +87,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message": "Registration successful",
 		"data":    user,
+		"message": "Registration successful",
 	})
 }
 
@@ -111,5 +112,36 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"data": user,
+	})
+}
+func (h *AuthHandler) Logout(c *gin.Context) {
+	
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Authorization header required",
+		})
+		return
+	}
+
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Invalid authorization format",
+		})
+		return
+	}
+
+	tokenString := parts[1]
+
+	if err := h.authService.Logout(tokenString); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Logout successful",
 	})
 }
