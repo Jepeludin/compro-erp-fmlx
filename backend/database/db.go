@@ -60,8 +60,6 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&models.User{},
-		// Add other models here as you create them
-		// &models.Project{},
-		// &models.Task{},
+		&models.TokenBlacklist{},
 	)
 }

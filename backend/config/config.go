@@ -44,7 +44,7 @@ func LoadConfig() *Config {
 		DBHost:         getEnv("DB_HOST", "localhost"),
 		DBPort:         getEnv("DB_PORT", "8181"),
 		DBUser:         getEnv("DB_USER", "postgres"),
-		DBPassword:     getEnv("DB_PASSWORD", "jemmy1303"),
+		DBPassword:     getEnv("DB_PASSWORD", "farhan03"),
 		DBName:         getEnv("DB_NAME", "ganttpro_db"),
 		DBSSLMode:      getEnv("DB_SSLMODE", "disable"),
 		JWTSecret:      getEnv("JWT_SECRET", "your-secret-key"),

@@ -28,9 +28,9 @@ func SetupRoutes(router *gin.Engine, db *gorm.DB, cfg *config.Config) {
 	userRepo := repository.NewUserRepository(db)
 	machineRepo := repository.NewMachineRepository(sqlDB)
 	jobOrderRepo := repository.NewJobOrderRepository(sqlDB)
-
+	tokenBlacklistRepo := repository.NewTokenBlacklistRepository(db)
 	// Initialize services
-	authService := services.NewAuthService(userRepo, cfg)
+	authService := services.NewAuthService(userRepo, tokenBlacklistRepo, cfg)
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService)
@@ -54,6 +54,7 @@ func SetupRoutes(router *gin.Engine, db *gorm.DB, cfg *config.Config) {
 		{
 			auth.POST("/login", authHandler.Login)
 			auth.POST("/register", authHandler.Register)
+			auth.POST("/logout", middleware.AuthMiddleware(authService), authHandler.Logout)
 		}
 
 		// Protected routes (authentication required)
