@@ -16,22 +16,30 @@ func SetupRoutes(
 	adminHandler *handlers.AdminHandler,
 	opPlanHandler *handlers.OperationPlanHandler,
 	gcodeHandler *handlers.GCodeHandler,
+	ganttHandler *handlers.GanttHandler,
 	authService *services.AuthService,
 ) {
+	// Initialize rate limiters
+	authRateLimiter := middleware.DefaultAuthRateLimiter()   // 5 requests per minute for auth
+	apiRateLimiter := middleware.DefaultAPIRateLimiter()     // 100 requests per minute for API
+
 	api := router.Group("/api/v1")
 
-	// Public routes
+	// Public routes with strict rate limiting (prevent brute force)
 	auth := api.Group("/auth")
 	{
-		auth.POST("/login", authHandler.Login)
-		auth.POST("/register", authHandler.Register)
-		auth.POST("/logout", middleware.AuthMiddleware(authService), authHandler.Logout)
-		auth.GET("/profile", middleware.AuthMiddleware(authService), authHandler.GetProfile)
+		// Login and Register have strict rate limiting (5 attempts per minute)
+		auth.POST("/login", authRateLimiter.RateLimit(), authHandler.Login)
+		auth.POST("/register", authRateLimiter.RateLimit(), authHandler.Register)
+		// Logout and Profile are protected by auth and have normal rate limiting
+		auth.POST("/logout", middleware.AuthMiddleware(authService), apiRateLimiter.RateLimit(), authHandler.Logout)
+		auth.GET("/profile", middleware.AuthMiddleware(authService), apiRateLimiter.RateLimit(), authHandler.GetProfile)
 	}
 
-	// Protected routes
+	// Protected routes with authentication and rate limiting
 	protected := api.Group("")
 	protected.Use(middleware.AuthMiddleware(authService))
+	protected.Use(apiRateLimiter.RateLimit())
 	{
 		// Machine routes
 		machines := protected.Group("/machines")
@@ -78,6 +86,26 @@ func SetupRoutes(
 			gcodes.GET("/plan/:plan_id", gcodeHandler.GetGCodeFilesByPlan) // Get files by plan
 			gcodes.GET("/:id/download", gcodeHandler.DownloadGCode)        // Download file
 			gcodes.DELETE("/:id", gcodeHandler.DeleteGCode)                // Delete file
+		}
+
+		// Gantt Chart routes
+		gantt := protected.Group("/gantt-chart")
+		{
+			gantt.GET("", ganttHandler.GetGanttChart) // Get Gantt chart data with filters
+		}
+
+		// PPIC Schedule routes (for Gantt chart data management)
+		ppic := protected.Group("/ppic-schedules")
+		{
+			ppic.GET("", ganttHandler.GetAllPPICSchedules)                                     // Get all schedules
+			ppic.GET("/:id", ganttHandler.GetPPICSchedule)                                     // Get single schedule
+			ppic.POST("", ganttHandler.CreatePPICSchedule)                                     // Create schedule
+			ppic.PUT("/:id", ganttHandler.UpdatePPICSchedule)                                  // Update schedule
+			ppic.DELETE("/:id", ganttHandler.DeletePPICSchedule)                               // Delete schedule
+			ppic.GET("/machine/:machine_id", ganttHandler.GetSchedulesByMachine)               // Get by machine
+			ppic.POST("/:id/machines", ganttHandler.AddMachineAssignment)                      // Add machine
+			ppic.DELETE("/:id/machines/:assignment_id", ganttHandler.RemoveMachineAssignment)  // Remove machine
+			ppic.PUT("/:id/machines/:assignment_id/status", ganttHandler.UpdateMachineAssignmentStatus) // Update status
 		}
 
 		// Admin routes

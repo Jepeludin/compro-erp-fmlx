@@ -62,6 +62,84 @@ func (r *JobOrderRepository) GetAll() ([]models.JobOrder, error) {
 	return jobs, nil
 }
 
+// GetAllPaginated retrieves job orders with pagination
+func (r *JobOrderRepository) GetAllPaginated(limit, offset int, sortField, sortOrder string) ([]models.JobOrder, int64, error) {
+	// Whitelist allowed sort fields to prevent SQL injection
+	allowedSortFields := map[string]string{
+		"id":         "jo.id",
+		"njo":        "jo.njo",
+		"project":    "jo.project",
+		"item":       "jo.item",
+		"deadline":   "jo.deadline",
+		"status":     "jo.status",
+		"created_at": "jo.created_at",
+		"updated_at": "jo.updated_at",
+	}
+
+	sortColumn, ok := allowedSortFields[sortField]
+	if !ok {
+		sortColumn = "jo.created_at"
+	}
+	if sortOrder != "asc" && sortOrder != "desc" {
+		sortOrder = "desc"
+	}
+
+	// Get total count
+	var total int64
+	countQuery := `SELECT COUNT(*) FROM job_orders jo WHERE jo.deleted_at IS NULL`
+	err := r.db.QueryRow(countQuery).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Get paginated data
+	query := `
+		SELECT 
+			jo.id, jo.machine_id, m.machine_name, jo.njo, jo.project, jo.item, 
+			jo.note, jo.deadline, jo.operator_id, u.username, jo.status, 
+			jo.created_at, jo.completed_at, jo.updated_at
+		FROM job_orders jo
+		LEFT JOIN machines m ON m.id = jo.machine_id
+		LEFT JOIN users u ON u.id = jo.operator_id
+		WHERE jo.deleted_at IS NULL
+		ORDER BY ` + sortColumn + ` ` + sortOrder + `
+		LIMIT $1 OFFSET $2
+	`
+
+	rows, err := r.db.Query(query, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var jobs []models.JobOrder
+	for rows.Next() {
+		var j models.JobOrder
+		err := rows.Scan(
+			&j.ID,
+			&j.MachineID,
+			&j.MachineName,
+			&j.NJO,
+			&j.Project,
+			&j.Item,
+			&j.Note,
+			&j.Deadline,
+			&j.OperatorID,
+			&j.OperatorName,
+			&j.Status,
+			&j.CreatedAt,
+			&j.CompletedAt,
+			&j.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		jobs = append(jobs, j)
+	}
+
+	return jobs, total, nil
+}
+
 // GetByID retrieves a job order by ID with stages
 func (r *JobOrderRepository) GetByID(id int64) (*models.JobOrder, error) {
 	query := `

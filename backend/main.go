@@ -1,7 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"ganttpro-backend/config"
 	"ganttpro-backend/database"
@@ -37,6 +43,7 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	machineRepo := repository.NewMachineRepository(sqlDB)
 	jobOrderRepo := repository.NewJobOrderRepository(sqlDB)
+	ppicScheduleRepo := repository.NewPPICScheduleRepository(sqlDB)
 
 	tokenBlacklistRepo := repository.NewTokenBlacklistRepository(db)
 	opPlanRepo := repository.NewOperationPlanRepository(db)
@@ -47,6 +54,11 @@ func main() {
 	authService := services.NewAuthService(userRepo, tokenBlacklistRepo, cfg)
 	opPlanService := services.NewOperationPlanService(opPlanRepo, gcodeRepo, jobOrderRepo)
 	gcodeService := services.NewGCodeService(gcodeRepo, opPlanRepo, uploadPath)
+	ganttService := services.NewGanttService(ppicScheduleRepo)
+
+	// Initialize and start cleanup service (cleans expired tokens hourly)
+	cleanupService := services.NewCleanupService(tokenBlacklistRepo, services.DefaultCleanupConfig())
+	cleanupService.Start()
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService)
@@ -55,6 +67,7 @@ func main() {
 	adminHandler := handlers.NewAdminHandler(userRepo)
 	opPlanHandler := handlers.NewOperationPlanHandler(opPlanService)
 	gcodeHandler := handlers.NewGCodeHandler(gcodeService)
+	ganttHandler := handlers.NewGanttHandler(ganttService)
 
 	// Setup Gin router
 	router := gin.Default()
@@ -69,6 +82,7 @@ func main() {
 		adminHandler,
 		opPlanHandler,
 		gcodeHandler,
+		ganttHandler,
 		authService,
 	)
 
@@ -77,9 +91,44 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	// Start server
-	log.Printf("Server starting on port %s", cfg.Port)
-	if err := router.Run(":" + cfg.Port); err != nil {
-		log.Fatal("Failed to start server:", err)
+	// Create HTTP server
+	srv := &http.Server{
+		Addr:    ":" + cfg.Port,
+		Handler: router,
 	}
+
+	// Start server in a goroutine
+	go func() {
+		log.Printf("Server starting on port %s", cfg.Port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Failed to start server: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down server...")
+
+	// Create a deadline for shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Stop cleanup service
+	if err := cleanupService.Stop(ctx); err != nil {
+		log.Printf("Cleanup service shutdown error: %v", err)
+	}
+
+	// Shutdown HTTP server
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	// Close database connection
+	if err := sqlDB.Close(); err != nil {
+		log.Printf("Database close error: %v", err)
+	}
+
+	log.Println("Server exited gracefully")
 }
