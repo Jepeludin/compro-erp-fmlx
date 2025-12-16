@@ -3,6 +3,7 @@ package handlers
 import (
 	"ganttpro-backend/models"
 	"ganttpro-backend/repository"
+	"ganttpro-backend/utils"
 	"net/http"
 	"strconv"
 
@@ -19,21 +20,42 @@ func NewMachineHandler(repo *repository.MachineRepository) *MachineHandler {
 
 // GetAllMachines godoc
 // @Summary Get all machines
-// @Description Get all active machines
+// @Description Get all active machines with pagination
 // @Tags machines
 // @Produce json
-// @Success 200 {object} map[string]interface{}
+// @Param page query int false "Page number (default: 1)"
+// @Param page_size query int false "Page size (default: 20, max: 100)"
+// @Param sort query string false "Sort field (default: machine_name)"
+// @Param order query string false "Sort order: asc or desc (default: asc)"
+// @Success 200 {object} utils.PaginatedResponse
 // @Router /api/v1/machines [get]
 func (h *MachineHandler) GetAllMachines(c *gin.Context) {
-	machines, err := h.repo.GetAll()
+	params := utils.GetPaginationParams(c)
+
+	// Default sort for machines is by name
+	if params.Sort == "created_at" {
+		params.Sort = "machine_name"
+		params.Order = "asc"
+	}
+
+	machines, total, err := h.repo.GetAllPaginated(
+		params.GetLimit(),
+		params.GetOffset(),
+		params.Sort,
+		params.Order,
+	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch machines"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to fetch machines",
+		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"machines": machines,
-		"count":    len(machines),
+		"success":    true,
+		"data":       machines,
+		"pagination": utils.BuildPagination(params, total),
 	})
 }
 

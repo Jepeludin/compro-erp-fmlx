@@ -2,6 +2,7 @@ package database
 
 import (
 	"fmt"
+	"log"
 
 	"ganttpro-backend/config"
 	"ganttpro-backend/models"
@@ -12,7 +13,6 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// InitDB initializes the database connection
 func InitDB(cfg *config.Config) (*gorm.DB, error) {
 	var dialector gorm.Dialector
 
@@ -56,10 +56,20 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 	return db, nil
 }
 
-// AutoMigrate runs auto migration for all models
-func AutoMigrate(db *gorm.DB) error {
-	return db.AutoMigrate(
+func AutoMigrate(db *gorm.DB) {
+	err := db.AutoMigrate(
 		&models.User{},
+		&models.Machine{},
+		&models.JobOrder{},
 		&models.TokenBlacklist{},
+		&models.OperationPlan{},
+		&models.OperationPlanApproval{},
+		&models.GCodeFile{},
 	)
+
+	if err != nil {
+		log.Fatal("Failed to migrate database:", err)
+	}
+
+	log.Println("Database migration completed")
 }

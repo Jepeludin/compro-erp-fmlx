@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"ganttpro-backend/models"
 	"ganttpro-backend/repository"
 	"ganttpro-backend/utils"
 	"net/http"
@@ -19,34 +20,34 @@ func NewAdminHandler(userRepo *repository.UserRepository) *AdminHandler {
 	}
 }
 
-// GetAllUsers - Get all users (Admin only)
+// GetAllUsers - Get all users (Admin only) with pagination
 func (h *AdminHandler) GetAllUsers(c *gin.Context) {
-	users, err := h.userRepo.GetAllUsers()
+	params := utils.GetPaginationParams(c)
+
+	users, total, err := h.userRepo.GetAllUsersPaginated(
+		params.GetLimit(),
+		params.GetOffset(),
+		params.Sort,
+		params.Order,
+	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to retrieve users",
+			"success": false,
+			"error":   "Failed to retrieve users",
 		})
 		return
 	}
 
-	// Remove password from response
-	var usersResponse []gin.H
-	for _, user := range users {
-		usersResponse = append(usersResponse, gin.H{
-			"id":         user.ID,
-			"username":   user.Username,
-			"user_id":    user.UserID,
-			"role":       user.Role,
-			"operator":   user.Operator,
-			"is_active":  user.IsActive,
-			"created_at": user.CreatedAt,
-			"updated_at": user.UpdatedAt,
-		})
+	// Convert to response format (exclude password)
+	usersResponse := make([]models.UserResponse, len(users))
+	for i, user := range users {
+		usersResponse[i] = user.ToResponse()
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"users": usersResponse,
-		"total": len(usersResponse),
+		"success":    true,
+		"data":       usersResponse,
+		"pagination": utils.BuildPagination(params, total),
 	})
 }
 
@@ -98,18 +99,10 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 
 	// Update role if provided
 	if req.Role != nil {
-		// Validate role
-		validRoles := []string{"Admin", "PPIC", "Toolpather", "PEM", "QC", "Engineering", "Guest"}
-		isValidRole := false
-		for _, validRole := range validRoles {
-			if *req.Role == validRole {
-				isValidRole = true
-				break
-			}
-		}
-		if !isValidRole {
+		if !models.IsValidRole(*req.Role) {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "Invalid role. Must be one of: Admin, PPIC, Toolpather, PEM, QC, Engineering, Guest",
+				"success": false,
+				"error":   "Invalid role. Must be one of: Admin, PPIC, Toolpather, PEM, QC, Engineering, Operator, Guest",
 			})
 			return
 		}

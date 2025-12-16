@@ -42,7 +42,7 @@ func LoadConfig() *Config {
 		Environment:    getEnv("ENV", "development"),
 		DBDriver:       getEnv("DB_DRIVER", "postgres"),
 		DBHost:         getEnv("DB_HOST", "localhost"),
-		DBPort:         getEnv("DB_PORT", "8181"),
+		DBPort:         getEnv("DB_PORT", "5432"),
 		DBUser:         getEnv("DB_USER", "postgres"),
 		DBPassword:     getEnv("DB_PASSWORD", "farhan03"),
 		DBName:         getEnv("DB_NAME", "ganttpro_db"),

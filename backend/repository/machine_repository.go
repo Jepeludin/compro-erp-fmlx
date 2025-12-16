@@ -14,7 +14,7 @@ func NewMachineRepository(db *sql.DB) *MachineRepository {
 	return &MachineRepository{db: db}
 }
 
-// GetAll retrieves all active machines
+// GetAll retrieves all active machines (without pagination, for backward compatibility)
 func (r *MachineRepository) GetAll() ([]models.Machine, error) {
 	query := `
 		SELECT id, machine_code, machine_name, machine_type, location, status, created_at, updated_at
@@ -49,6 +49,67 @@ func (r *MachineRepository) GetAll() ([]models.Machine, error) {
 	}
 
 	return machines, nil
+}
+
+// GetAllPaginated retrieves machines with pagination
+func (r *MachineRepository) GetAllPaginated(limit, offset int, sortField, sortOrder string) ([]models.Machine, int64, error) {
+	// Whitelist allowed sort fields to prevent SQL injection
+	allowedSortFields := map[string]bool{
+		"id": true, "machine_code": true, "machine_name": true,
+		"machine_type": true, "location": true, "status": true,
+		"created_at": true, "updated_at": true,
+	}
+
+	if !allowedSortFields[sortField] {
+		sortField = "machine_name"
+	}
+	if sortOrder != "asc" && sortOrder != "desc" {
+		sortOrder = "asc"
+	}
+
+	// Get total count
+	var total int64
+	countQuery := `SELECT COUNT(*) FROM machines WHERE deleted_at IS NULL`
+	err := r.db.QueryRow(countQuery).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Get paginated data
+	query := `
+		SELECT id, machine_code, machine_name, machine_type, location, status, created_at, updated_at
+		FROM machines
+		WHERE deleted_at IS NULL
+		ORDER BY ` + sortField + ` ` + sortOrder + `
+		LIMIT $1 OFFSET $2
+	`
+
+	rows, err := r.db.Query(query, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var machines []models.Machine
+	for rows.Next() {
+		var m models.Machine
+		err := rows.Scan(
+			&m.ID,
+			&m.MachineCode,
+			&m.MachineName,
+			&m.MachineType,
+			&m.Location,
+			&m.Status,
+			&m.CreatedAt,
+			&m.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		machines = append(machines, m)
+	}
+
+	return machines, total, nil
 }
 
 // GetByID retrieves a machine by ID

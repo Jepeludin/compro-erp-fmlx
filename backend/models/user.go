@@ -6,6 +6,68 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	RoleAdmin       = "Admin"
+	RolePPIC        = "PPIC"
+	RoleToolpather  = "Toolpather"
+	RolePEM         = "PEM"
+	RoleQC          = "QC"
+	RoleEngineering = "Engineering"
+	RoleGuest       = "Guest"
+	RoleOperator    = "Operator"
+)
+
+var ValidRoles = []string{
+	RoleAdmin,
+	RolePPIC,
+	RoleToolpather,
+	RolePEM,
+	RoleQC,
+	RoleEngineering,
+	RoleGuest,
+	RoleOperator,
+}
+
+func IsValidRole(role string) bool {
+	for _, r := range ValidRoles {
+		if r == role {
+			return true
+		}
+	}
+	return false
+}
+
+func GetRoleDisplayName(role string) string {
+	switch role {
+	case RoleAdmin:
+		return "Administrator"
+	case RolePPIC:
+		return "PPIC Staff"
+	case RoleToolpather:
+		return "Toolpather"
+	case RolePEM:
+		return "PEM Staff"
+	case RoleQC:
+		return "Quality Control"
+	case RoleEngineering:
+		return "Engineering"
+	case RoleOperator:
+		return "Machine Operator"
+	case RoleGuest:
+		return "Guest"
+	default:
+		return "Unknown"
+	}
+}
+
+var ApproverRoles = []string{
+	RolePEM,
+	RolePPIC,
+	RoleQC,
+	RoleEngineering,
+	RoleToolpather,
+}
+
 // User represents a user in the system
 type User struct {
 	ID        uint           `gorm:"primaryKey;autoIncrement" json:"id"`
@@ -27,21 +89,24 @@ func (User) TableName() string {
 
 // UserResponse represents the user data returned in API responses
 type UserResponse struct {
-	Username string `json:"username"`
-	UserID   string `json:"user_id"`
-	Role     string `json:"role"`
-	Operator string `json:"operator"`
-	IsActive bool   `json:"is_active"`
+	ID        uint      `json:"id"`
+	Username  string    `json:"username"`
+	UserID    string    `json:"user_id"`
+	Role      string    `json:"role"`
+	Operator  string    `json:"operator"`
+	IsActive  bool      `json:"is_active"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // ToResponse converts User to UserResponse
 func (u *User) ToResponse() UserResponse {
 	return UserResponse{
-
-		Username: u.Username,
-		UserID:   u.UserID,
-		Role:     u.Role,
-		Operator: u.Operator,
-		IsActive: u.IsActive,
+		ID:        u.ID,
+		Username:  u.Username,
+		UserID:    u.UserID,
+		Role:      u.Role,
+		Operator:  u.Operator,
+		IsActive:  u.IsActive,
+		CreatedAt: u.CreatedAt,
 	}
 }

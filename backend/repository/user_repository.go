@@ -93,6 +93,35 @@ func (r *UserRepository) GetAllUsers() ([]models.User, error) {
 	return users, err
 }
 
+// GetAllUsersPaginated returns paginated users for admin
+func (r *UserRepository) GetAllUsersPaginated(limit, offset int, sortField, sortOrder string) ([]models.User, int64, error) {
+	// Whitelist allowed sort fields
+	allowedSortFields := map[string]bool{
+		"id": true, "username": true, "user_id": true,
+		"role": true, "is_active": true, "created_at": true, "updated_at": true,
+	}
+
+	if !allowedSortFields[sortField] {
+		sortField = "created_at"
+	}
+	if sortOrder != "asc" && sortOrder != "desc" {
+		sortOrder = "desc"
+	}
+
+	var total int64
+	if err := r.db.Model(&models.User{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var users []models.User
+	err := r.db.Order(sortField + " " + sortOrder).
+		Limit(limit).
+		Offset(offset).
+		Find(&users).Error
+
+	return users, total, err
+}
+
 // GetByID finds a user by ID (alias for FindByID for consistency)
 func (r *UserRepository) GetByID(id uint) (*models.User, error) {
 	return r.FindByID(id)

@@ -3,6 +3,7 @@ package handlers
 import (
 	"ganttpro-backend/models"
 	"ganttpro-backend/repository"
+	"ganttpro-backend/utils"
 	"net/http"
 	"strconv"
 
@@ -19,21 +20,36 @@ func NewJobOrderHandler(repo *repository.JobOrderRepository) *JobOrderHandler {
 
 // GetAllJobOrders godoc
 // @Summary Get all job orders
-// @Description Get all job orders with machine and operator info
+// @Description Get all job orders with machine and operator info (paginated)
 // @Tags job_orders
 // @Produce json
-// @Success 200 {object} map[string]interface{}
+// @Param page query int false "Page number (default: 1)"
+// @Param page_size query int false "Page size (default: 20, max: 100)"
+// @Param sort query string false "Sort field (default: created_at)"
+// @Param order query string false "Sort order: asc or desc (default: desc)"
+// @Success 200 {object} utils.PaginatedResponse
 // @Router /api/v1/job-orders [get]
 func (h *JobOrderHandler) GetAllJobOrders(c *gin.Context) {
-	jobs, err := h.repo.GetAll()
+	params := utils.GetPaginationParams(c)
+
+	jobs, total, err := h.repo.GetAllPaginated(
+		params.GetLimit(),
+		params.GetOffset(),
+		params.Sort,
+		params.Order,
+	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch job orders"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to fetch job orders",
+		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"job_orders": jobs,
-		"count":      len(jobs),
+		"success":    true,
+		"data":       jobs,
+		"pagination": utils.BuildPagination(params, total),
 	})
 }
 

@@ -31,3 +31,8 @@ type UpdateMachineRequest struct {
 	Location    string `json:"location"`
 	Status      string `json:"status"`
 }
+
+type DeleteMachineRequest struct {
+	MachineCode string `json:"machine_code" binding:"required"`
+	Reason string `json:"reason" binding:"required"`
+}
