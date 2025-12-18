@@ -15,6 +15,7 @@ type RateLimiter struct {
 	mu       sync.RWMutex
 	limit    int           // Max requests allowed
 	window   time.Duration // Time window for rate limiting
+	stopCh   chan struct{} // Channel to signal cleanup goroutine to stop
 }
 
 // RateLimiterConfig holds configuration for rate limiter
@@ -41,6 +42,7 @@ func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 		attempts: make(map[string][]time.Time),
 		limit:    limit,
 		window:   window,
+		stopCh:   make(chan struct{}),
 	}
 
 	// Start background cleanup goroutine
@@ -54,24 +56,34 @@ func (rl *RateLimiter) cleanup() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		rl.mu.Lock()
-		now := time.Now()
-		for ip, attempts := range rl.attempts {
-			valid := make([]time.Time, 0)
-			for _, t := range attempts {
-				if now.Sub(t) < rl.window {
-					valid = append(valid, t)
+	for {
+		select {
+		case <-ticker.C:
+			rl.mu.Lock()
+			now := time.Now()
+			for ip, attempts := range rl.attempts {
+				valid := make([]time.Time, 0)
+				for _, t := range attempts {
+					if now.Sub(t) < rl.window {
+						valid = append(valid, t)
+					}
+				}
+				if len(valid) == 0 {
+					delete(rl.attempts, ip)
+				} else {
+					rl.attempts[ip] = valid
 				}
 			}
-			if len(valid) == 0 {
-				delete(rl.attempts, ip)
-			} else {
-				rl.attempts[ip] = valid
-			}
+			rl.mu.Unlock()
+		case <-rl.stopCh:
+			return
 		}
-		rl.mu.Unlock()
 	}
+}
+
+// Stop gracefully stops the rate limiter cleanup goroutine
+func (rl *RateLimiter) Stop() {
+	close(rl.stopCh)
 }
 
 // isAllowed checks if a request from the given key is allowed

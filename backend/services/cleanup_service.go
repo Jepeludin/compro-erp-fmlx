@@ -21,10 +21,10 @@ type CleanupService struct {
 
 // CleanupConfig holds configuration for cleanup service
 type CleanupConfig struct {
-	Interval time.Duration // How often to run cleanup (default: 1 hour)
+	Interval time.Duration
 }
 
-// DefaultCleanupConfig returns default cleanup configuration
+// DefaultCleanupConfig returns default cleanup configuration (1 hour interval)
 func DefaultCleanupConfig() CleanupConfig {
 	return CleanupConfig{
 		Interval: 1 * time.Hour,
@@ -50,7 +50,7 @@ func (s *CleanupService) Start() {
 	defer s.mu.Unlock()
 
 	if s.running {
-		log.Println("Cleanup service is already running")
+		log.Println("[CleanupService] Already running")
 		return
 	}
 
@@ -59,7 +59,7 @@ func (s *CleanupService) Start() {
 
 	go func() {
 		defer s.wg.Done()
-		log.Printf("Cleanup service started (interval: %v)", s.interval)
+		log.Printf("[CleanupService] Started (interval: %v)", s.interval)
 
 		// Run cleanup immediately on startup
 		s.runCleanup()
@@ -72,7 +72,7 @@ func (s *CleanupService) Start() {
 			case <-ticker.C:
 				s.runCleanup()
 			case <-s.stopCh:
-				log.Println("Cleanup service stopped")
+				log.Println("[CleanupService] Stopped")
 				return
 			}
 		}
@@ -108,36 +108,47 @@ func (s *CleanupService) Stop(ctx context.Context) error {
 
 // runCleanup performs all cleanup tasks
 func (s *CleanupService) runCleanup() {
-	log.Println("Running scheduled cleanup tasks...")
-
-	// Clean expired blacklisted tokens
-	if err := s.cleanExpiredTokens(); err != nil {
-		log.Printf("Error cleaning expired tokens: %v", err)
-	}
-
-	log.Println("Cleanup tasks completed")
-}
-
-// cleanExpiredTokens removes expired tokens from the blacklist
-func (s *CleanupService) cleanExpiredTokens() error {
 	startTime := time.Now()
 
+	// Clean expired blacklisted tokens
 	count, err := s.tokenBlacklistRepo.CleanExpiredTokensWithCount()
 	if err != nil {
-		return err
+		log.Printf("[CleanupService] Error cleaning expired tokens: %v", err)
+		return
 	}
+
+	duration := time.Since(startTime)
 
 	if count > 0 {
-		log.Printf("Cleaned %d expired tokens in %v", count, time.Since(startTime))
-	} else {
-		log.Printf("No expired tokens to clean (took %v)", time.Since(startTime))
+		log.Printf("[CleanupService] Cleaned %d expired tokens in %v", count, duration)
 	}
-
-	return nil
 }
 
-// RunNow triggers an immediate cleanup (useful for testing or manual triggers)
+// RunNow triggers an immediate cleanup (useful for testing)
 func (s *CleanupService) RunNow() {
 	s.runCleanup()
 }
 
+// GetStats returns cleanup service statistics
+func (s *CleanupService) GetStats() CleanupStats {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	totalCount, _ := s.tokenBlacklistRepo.GetBlacklistCount()
+	expiredCount, _ := s.tokenBlacklistRepo.GetExpiredCount()
+
+	return CleanupStats{
+		IsRunning:     s.running,
+		Interval:      s.interval,
+		TotalTokens:   totalCount,
+		ExpiredTokens: expiredCount,
+	}
+}
+
+// CleanupStats holds statistics about the cleanup service
+type CleanupStats struct {
+	IsRunning     bool          `json:"is_running"`
+	Interval      time.Duration `json:"interval"`
+	TotalTokens   int64         `json:"total_tokens"`
+	ExpiredTokens int64         `json:"expired_tokens"`
+}

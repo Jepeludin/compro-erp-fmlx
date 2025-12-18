@@ -90,6 +90,7 @@ func (s *AuthService) generateToken(user *models.User) (string, error) {
 type RegisterRequest struct {
 	UserID   string `json:"user_id" binding:"required"`               // e.g., PI0824.2374
 	Username string `json:"username" binding:"required,min=3,max=50"` // e.g., BAYU
+	Email    string `json:"email" binding:"required,email"`           // User email for notifications
 	Password string `json:"password" binding:"required,min=4"`        // Password (will be hashed)
 	Role     string `json:"role" binding:"required"`                  // Admin, PPIC, etc.
 	Operator string `json:"operator"`                                 // Operator field
@@ -117,6 +118,7 @@ func (s *AuthService) Register(req RegisterRequest) (*models.UserResponse, error
 	user := &models.User{
 		Username: req.Username,
 		UserID:   req.UserID,
+		Email:    req.Email,
 		Password: hashedPassword,
 		Role:     req.Role,
 		Operator: req.Operator,

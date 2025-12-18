@@ -126,3 +126,20 @@ func (r *UserRepository) GetAllUsersPaginated(limit, offset int, sortField, sort
 func (r *UserRepository) GetByID(id uint) (*models.User, error) {
 	return r.FindByID(id)
 }
+
+// FindByRoles finds all active users with any of the specified roles
+func (r *UserRepository) FindByRoles(roles []string) ([]models.User, error) {
+	var users []models.User
+	err := r.db.Where("role IN ? AND is_active = ?", roles, true).Find(&users).Error
+	return users, err
+}
+
+// FindByEmail finds a user by email
+func (r *UserRepository) FindByEmail(email string) (*models.User, error) {
+	var user models.User
+	err := r.db.Where("email = ? AND is_active = ?", email, true).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}

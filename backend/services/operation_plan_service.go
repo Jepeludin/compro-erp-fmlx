@@ -1,355 +1,414 @@
 package services
 
 import (
-    "errors"
-    "fmt"
-    "ganttpro-backend/models"
-    "ganttpro-backend/repository"
-    "io"
-    "mime/multipart"
-    "os"
-    "path/filepath"
-    "strings"
-    "time"
+	"errors"
+	"fmt"
+	"ganttpro-backend/models"
+	"ganttpro-backend/repository"
+	"io"
+	"mime/multipart"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 )
 
 type OperationPlanService struct {
-    planRepo      *repository.OperationPlanRepository
-    gCodeFileRepo *repository.GCodeFileRepository
-    jobOrderRepo  *repository.JobOrderRepository
-    uploadPath    string
+	planRepo      *repository.OperationPlanRepository
+	gCodeFileRepo *repository.GCodeFileRepository
+	jobOrderRepo  *repository.JobOrderRepository
+	userRepo      *repository.UserRepository
+	emailService  *EmailService
+	uploadPath    string
 }
 
 func NewOperationPlanService(
-    planRepo *repository.OperationPlanRepository,
-    gCodeFileRepo *repository.GCodeFileRepository,
-    jobOrderRepo *repository.JobOrderRepository,
+	planRepo *repository.OperationPlanRepository,
+	gCodeFileRepo *repository.GCodeFileRepository,
+	jobOrderRepo *repository.JobOrderRepository,
+	userRepo *repository.UserRepository,
+	emailService *EmailService,
 ) *OperationPlanService {
-    // Create upload directory if not exists
-    uploadPath := "./uploads/gcodes"
-    if err := os.MkdirAll(uploadPath, os.ModePerm); err != nil {
-        panic("Failed to create upload directory: " + err.Error())
-    }
+	// Create upload directory if not exists
+	uploadPath := "./uploads/gcodes"
+	if err := os.MkdirAll(uploadPath, os.ModePerm); err != nil {
+		panic("Failed to create upload directory: " + err.Error())
+	}
 
-    return &OperationPlanService{
-        planRepo:      planRepo,
-        gCodeFileRepo: gCodeFileRepo,
-        jobOrderRepo:  jobOrderRepo,
-        uploadPath:    uploadPath,
-    }
+	return &OperationPlanService{
+		planRepo:      planRepo,
+		gCodeFileRepo: gCodeFileRepo,
+		jobOrderRepo:  jobOrderRepo,
+		userRepo:      userRepo,
+		emailService:  emailService,
+		uploadPath:    uploadPath,
+	}
 }
 
 // CreateOperationPlanRequest represents the request to create an operation plan
 type CreateOperationPlanRequest struct {
-    JobOrderID   uint   `json:"job_order_id" binding:"required"`
-    MachineID    uint   `json:"machine_id" binding:"required"`
-    PartQuantity int    `json:"part_quantity"`
-    Description  string `json:"description"`
+	JobOrderID   uint   `json:"job_order_id" binding:"required"`
+	MachineID    uint   `json:"machine_id" binding:"required"`
+	PartQuantity int    `json:"part_quantity"`
+	Description  string `json:"description"`
 }
 
 // Create creates a new operation plan
 func (s *OperationPlanService) Create(req CreateOperationPlanRequest, createdBy uint) (*models.OperationPlan, error) {
-    // Verify job order exists
-    _, err := s.jobOrderRepo.GetByID(int64(req.JobOrderID))
-    if err != nil {
-        return nil, errors.New("job order not found")
-    }
+	// Verify job order exists
+	jobOrder, err := s.jobOrderRepo.GetByID(int64(req.JobOrderID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify job order: %w", err)
+	}
+	if jobOrder == nil {
+		return nil, fmt.Errorf("job order with ID %d not found", req.JobOrderID)
+	}
 
-    // Check if operation plan already exists for this job order
-    existingPlan, _ := s.planRepo.FindByJobOrderID(req.JobOrderID)
-    if existingPlan != nil {
-        return nil, errors.New("operation plan already exists for this job order")
-    }
+	// Check if operation plan already exists for this job order
+	existingPlan, err := s.planRepo.FindByJobOrderID(req.JobOrderID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing operation plan: %w", err)
+	}
+	if existingPlan != nil {
+		return nil, fmt.Errorf("operation plan already exists for job order %s (ID: %d)", jobOrder.NJO, req.JobOrderID)
+	}
 
-    plan := &models.OperationPlan{
-        JobOrderID:   req.JobOrderID,
-        MachineID:    req.MachineID,
-        PartQuantity: req.PartQuantity,
-        Description:  req.Description,
-        Status:       models.StatusDraft,
-        CreatedBy:    createdBy,
-    }
+	plan := &models.OperationPlan{
+		JobOrderID:   req.JobOrderID,
+		MachineID:    req.MachineID,
+		PartQuantity: req.PartQuantity,
+		Description:  req.Description,
+		Status:       models.StatusDraft,
+		CreatedBy:    createdBy,
+	}
 
-    if err := s.planRepo.Create(plan); err != nil {
-        return nil, errors.New("failed to create operation plan")
-    }
+	if err := s.planRepo.Create(plan); err != nil {
+		return nil, fmt.Errorf("failed to create operation plan: %w", err)
+	}
 
-    // Reload with relations
-    return s.planRepo.FindByID(plan.ID)
+	// Reload with relations
+	result, err := s.planRepo.FindByID(plan.ID)
+	if err != nil {
+		return nil, fmt.Errorf("operation plan created but failed to load: %w", err)
+	}
+	return result, nil
 }
 
 // GetByID gets an operation plan by ID
 func (s *OperationPlanService) GetByID(id uint) (*models.OperationPlan, error) {
-    return s.planRepo.FindByID(id)
+	return s.planRepo.FindByID(id)
 }
 
 // GetByJobOrderID gets an operation plan by job order ID
 func (s *OperationPlanService) GetByJobOrderID(jobOrderID uint) (*models.OperationPlan, error) {
-    return s.planRepo.FindByJobOrderID(jobOrderID)
+	return s.planRepo.FindByJobOrderID(jobOrderID)
 }
 
 // GetAll gets all operation plans with optional filters
 func (s *OperationPlanService) GetAll(status string, machineID uint) ([]models.OperationPlan, error) {
-    return s.planRepo.FindAll(status, machineID)
+	return s.planRepo.FindAll(status, machineID)
 }
 
 // GetByCreator gets operation plans created by a user
 func (s *OperationPlanService) GetByCreator(userID uint) ([]models.OperationPlan, error) {
-    return s.planRepo.FindByCreator(userID)
+	return s.planRepo.FindByCreator(userID)
 }
 
 // UpdateOperationPlanRequest represents the request to update an operation plan
 type UpdateOperationPlanRequest struct {
-    PartQuantity int    `json:"part_quantity"`
-    Description  string `json:"description"`
+	PartQuantity int    `json:"part_quantity"`
+	Description  string `json:"description"`
 }
 
 // Update updates an operation plan (only if status is draft)
 func (s *OperationPlanService) Update(id uint, req UpdateOperationPlanRequest) (*models.OperationPlan, error) {
-    plan, err := s.planRepo.FindByID(id)
-    if err != nil {
-        return nil, errors.New("operation plan not found")
-    }
+	plan, err := s.planRepo.FindByID(id)
+	if err != nil {
+		return nil, errors.New("operation plan not found")
+	}
 
-    if plan.Status != models.StatusDraft {
-        return nil, errors.New("cannot update operation plan that is not in draft status")
-    }
+	if plan.Status != models.StatusDraft {
+		return nil, errors.New("cannot update operation plan that is not in draft status")
+	}
 
-    plan.PartQuantity = req.PartQuantity
-    plan.Description = req.Description
+	plan.PartQuantity = req.PartQuantity
+	plan.Description = req.Description
 
-    if err := s.planRepo.Update(plan); err != nil {
-        return nil, errors.New("failed to update operation plan")
-    }
+	if err := s.planRepo.Update(plan); err != nil {
+		return nil, errors.New("failed to update operation plan")
+	}
 
-    return s.planRepo.FindByID(id)
+	return s.planRepo.FindByID(id)
 }
 
 // Delete deletes an operation plan (only if status is draft)
 func (s *OperationPlanService) Delete(id uint) error {
-    plan, err := s.planRepo.FindByID(id)
-    if err != nil {
-        return errors.New("operation plan not found")
-    }
+	plan, err := s.planRepo.FindByID(id)
+	if err != nil {
+		return errors.New("operation plan not found")
+	}
 
-    if plan.Status != models.StatusDraft {
-        return errors.New("cannot delete operation plan that is not in draft status")
-    }
+	if plan.Status != models.StatusDraft {
+		return errors.New("cannot delete operation plan that is not in draft status")
+	}
 
-    // Delete associated G-code files from filesystem
-    for _, file := range plan.GCodeFiles {
-        os.Remove(file.FilePath)
-    }
+	// Delete associated G-code files from filesystem
+	for _, file := range plan.GCodeFiles {
+		os.Remove(file.FilePath)
+	}
 
-    // Delete G-code file records
-    if err := s.gCodeFileRepo.DeleteByOperationPlanID(id); err != nil {
-        return errors.New("failed to delete G-code files")
-    }
+	// Delete G-code file records
+	if err := s.gCodeFileRepo.DeleteByOperationPlanID(id); err != nil {
+		return errors.New("failed to delete G-code files")
+	}
 
-    return s.planRepo.Delete(id)
+	return s.planRepo.Delete(id)
 }
 
 // SubmitForApproval submits an operation plan for approval
 func (s *OperationPlanService) SubmitForApproval(id uint) (*models.OperationPlan, error) {
-    plan, err := s.planRepo.FindByID(id)
-    if err != nil {
-        return nil, errors.New("operation plan not found")
-    }
+	plan, err := s.planRepo.FindByID(id)
+	if err != nil {
+		return nil, errors.New("operation plan not found")
+	}
 
-    if plan.Status != models.StatusDraft {
-        return nil, errors.New("operation plan is not in draft status")
-    }
+	if plan.Status != models.StatusDraft {
+		return nil, errors.New("operation plan is not in draft status")
+	}
 
-    // Check if at least one G-code file is uploaded
-    if len(plan.GCodeFiles) == 0 {
-        return nil, errors.New("at least one G-code file must be uploaded before submitting")
-    }
+	// Check if at least one G-code file is uploaded
+	if len(plan.GCodeFiles) == 0 {
+		return nil, errors.New("at least one G-code file must be uploaded before submitting")
+	}
 
-    if err := s.planRepo.SubmitForApproval(id); err != nil {
-        return nil, errors.New("failed to submit for approval")
-    }
+	if err := s.planRepo.SubmitForApproval(id); err != nil {
+		return nil, errors.New("failed to submit for approval")
+	}
 
-    return s.planRepo.FindByID(id)
+	return s.planRepo.FindByID(id)
 }
 
 // Approve approves an operation plan
 func (s *OperationPlanService) Approve(planID uint, approverID uint, approverRole string) (*models.OperationPlan, error) {
-    plan, err := s.planRepo.FindByID(planID)
-    if err != nil {
-        return nil, errors.New("operation plan not found")
-    }
+	plan, err := s.planRepo.FindByID(planID)
+	if err != nil {
+		return nil, errors.New("operation plan not found")
+	}
 
-    if plan.Status != models.StatusPendingApproval {
-        return nil, errors.New("operation plan is not pending approval")
-    }
+	if plan.Status != models.StatusPendingApproval {
+		return nil, errors.New("operation plan is not pending approval")
+	}
 
-    // Verify approver role is valid
-    validRole := false
-    for _, role := range models.ApproverRoles {
-        if role == approverRole {
-            validRole = true
-            break
-        }
-    }
-    if !validRole {
-        return nil, errors.New("invalid approver role")
-    }
+	// Verify approver role is valid
+	validRole := false
+	for _, role := range models.ApproverRoles {
+		if role == approverRole {
+			validRole = true
+			break
+		}
+	}
+	if !validRole {
+		return nil, errors.New("invalid approver role")
+	}
 
-    if err := s.planRepo.Approve(planID, approverID, approverRole); err != nil {
-        return nil, err
-    }
+	if err := s.planRepo.Approve(planID, approverID, approverRole); err != nil {
+		return nil, err
+	}
 
-    // Reload plan to get updated status
-    plan, _ = s.planRepo.FindByID(planID)
+	// Reload plan to get updated status
+	plan, _ = s.planRepo.FindByID(planID)
 
-    // TODO: Send email notification if fully approved
-    if plan.Status == models.StatusApproved {
-        // s.sendApprovalNotification(plan)
-    }
+	// Send email notification if fully approved
+	if plan.Status == models.StatusApproved {
+		go s.sendPlanApprovedNotification(plan)
+	}
 
-    return plan, nil
+	return plan, nil
+}
+
+func (s *OperationPlanService) sendPlanApprovedNotification(plan *models.OperationPlan) {
+	if s.emailService == nil || !s.emailService.IsConfigured() {
+		return
+	}
+
+	creator, err := s.userRepo.FindByID(plan.CreatedBy)
+	if err != nil {
+		fmt.Printf("Warning: failed to get creator for plan %d: %v\n", plan.ID, err)
+		return
+	}
+
+	if creator.Email == "" {
+		return
+	}
+
+	data := PlanApprovedData{
+		RecipientName:   creator.Username,
+		PlanID:          plan.ID,
+		PlanNumber:      plan.PlanNumber,
+		PlanDescription: plan.Description,
+		ApprovedAt:      time.Now().Format("2006-01-02 15:04:05"),
+		FrontendURL:     s.emailService.GetFrontendURL(),
+	}
+
+	if plan.JobOrder != nil {
+		data.JobOrderNJO = plan.JobOrder.NJO
+	} else if plan.JobOrderID > 0 {
+		if jobOrder, err := s.jobOrderRepo.GetByID(int64(plan.JobOrderID)); err == nil && jobOrder != nil {
+			data.JobOrderNJO = jobOrder.NJO
+		}
+	}
+
+	if plan.Machine != nil {
+		data.MachineName = plan.Machine.MachineName
+	} else {
+		data.MachineName = fmt.Sprintf("Machine #%d", plan.MachineID)
+	}
+
+	if err := s.emailService.SendPlanApprovedNotification(creator, data); err != nil {
+		fmt.Printf("Warning: failed to send approval notification for plan %d: %v\n", plan.ID, err)
+	}
 }
 
 // GetApprovalStatus gets the approval status
 func (s *OperationPlanService) GetApprovalStatus(planID uint) ([]models.OperationPlanApproval, error) {
-    return s.planRepo.GetApprovalStatus(planID)
+	return s.planRepo.GetApprovalStatus(planID)
 }
 
 // UploadGCodeFile uploads a G-code file
 func (s *OperationPlanService) UploadGCodeFile(planID uint, file *multipart.FileHeader, uploadedBy uint) (*models.GCodeFile, error) {
-    // Verify operation plan exists
-    plan, err := s.planRepo.FindByID(planID)
-    if err != nil {
-        return nil, errors.New("operation plan not found")
-    }
+	// Verify operation plan exists
+	plan, err := s.planRepo.FindByID(planID)
+	if err != nil {
+		return nil, errors.New("operation plan not found")
+	}
 
-    // Only allow uploads for draft plans
-    if plan.Status != models.StatusDraft {
-        return nil, errors.New("cannot upload files to operation plan that is not in draft status")
-    }
+	// Only allow uploads for draft plans
+	if plan.Status != models.StatusDraft {
+		return nil, errors.New("cannot upload files to operation plan that is not in draft status")
+	}
 
-    // Validate file extension
-    ext := strings.ToLower(filepath.Ext(file.Filename))
-    if ext != ".txt" {
-        return nil, errors.New("only .txt files are allowed")
-    }
+	// Validate file extension
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	if ext != ".txt" {
+		return nil, errors.New("only .txt files are allowed")
+	}
 
-    // Generate unique filename
-    timestamp := time.Now().Format("20060102_150405")
-    generatedName := fmt.Sprintf("%s_%s%s", plan.PlanNumber, timestamp, ext)
-    filePath := filepath.Join(s.uploadPath, generatedName)
+	// Generate unique filename
+	timestamp := time.Now().Format("20060102_150405")
+	generatedName := fmt.Sprintf("%s_%s%s", plan.PlanNumber, timestamp, ext)
+	filePath := filepath.Join(s.uploadPath, generatedName)
 
-    // Open uploaded file
-    src, err := file.Open()
-    if err != nil {
-        return nil, errors.New("failed to open uploaded file")
-    }
-    defer src.Close()
+	// Open uploaded file
+	src, err := file.Open()
+	if err != nil {
+		return nil, errors.New("failed to open uploaded file")
+	}
+	defer src.Close()
 
-    // Create destination file
-    dst, err := os.Create(filePath)
-    if err != nil {
-        return nil, errors.New("failed to create file on server")
-    }
-    defer dst.Close()
+	// Create destination file
+	dst, err := os.Create(filePath)
+	if err != nil {
+		return nil, errors.New("failed to create file on server")
+	}
+	defer dst.Close()
 
-    // Copy file content
-    if _, err := io.Copy(dst, src); err != nil {
-        return nil, errors.New("failed to save file")
-    }
+	// Copy file content
+	if _, err := io.Copy(dst, src); err != nil {
+		return nil, errors.New("failed to save file")
+	}
 
-    // Create database record
-    gCodeFile := &models.GCodeFile{
-        OperationPlanID: planID,
-        FileName:        generatedName,
-        OriginalName:    file.Filename,
-        FilePath:        filePath,
-        FileSize:        file.Size,
-        UploadedBy:      uploadedBy,
-    }
+	// Create database record
+	gCodeFile := &models.GCodeFile{
+		OperationPlanID: planID,
+		FileName:        generatedName,
+		OriginalName:    file.Filename,
+		FilePath:        filePath,
+		FileSize:        file.Size,
+		UploadedBy:      uploadedBy,
+	}
 
-    if err := s.gCodeFileRepo.Create(gCodeFile); err != nil {
-        os.Remove(filePath) // Clean up file on error
-        return nil, errors.New("failed to save file record")
-    }
+	if err := s.gCodeFileRepo.Create(gCodeFile); err != nil {
+		os.Remove(filePath) // Clean up file on error
+		return nil, errors.New("failed to save file record")
+	}
 
-    return s.gCodeFileRepo.FindByID(gCodeFile.ID)
+	return s.gCodeFileRepo.FindByID(gCodeFile.ID)
 }
 
 // GetGCodeFile gets a G-code file by ID
 func (s *OperationPlanService) GetGCodeFile(fileID uint) (*models.GCodeFile, error) {
-    return s.gCodeFileRepo.FindByID(fileID)
+	return s.gCodeFileRepo.FindByID(fileID)
 }
 
 // GetGCodeFiles gets all G-code files for an operation plan
 func (s *OperationPlanService) GetGCodeFiles(planID uint) ([]models.GCodeFile, error) {
-    return s.gCodeFileRepo.FindByOperationPlanID(planID)
+	return s.gCodeFileRepo.FindByOperationPlanID(planID)
 }
 
 // DeleteGCodeFile deletes a G-code file
 func (s *OperationPlanService) DeleteGCodeFile(fileID uint, userID uint) error {
-    file, err := s.gCodeFileRepo.FindByID(fileID)
-    if err != nil {
-        return errors.New("file not found")
-    }
+	file, err := s.gCodeFileRepo.FindByID(fileID)
+	if err != nil {
+		return errors.New("file not found")
+	}
 
-    // Get the operation plan to check status
-    plan, err := s.planRepo.FindByID(file.OperationPlanID)
-    if err != nil {
-        return errors.New("operation plan not found")
-    }
+	// Get the operation plan to check status
+	plan, err := s.planRepo.FindByID(file.OperationPlanID)
+	if err != nil {
+		return errors.New("operation plan not found")
+	}
 
-    if plan.Status != models.StatusDraft {
-        return errors.New("cannot delete files from operation plan that is not in draft status")
-    }
+	if plan.Status != models.StatusDraft {
+		return errors.New("cannot delete files from operation plan that is not in draft status")
+	}
 
-    // Delete file from filesystem
-    if err := os.Remove(file.FilePath); err != nil {
-        // Log error but continue with database deletion
-        fmt.Printf("Warning: failed to delete file from filesystem: %v\n", err)
-    }
+	// Delete file from filesystem
+	if err := os.Remove(file.FilePath); err != nil {
+		// Log error but continue with database deletion
+		fmt.Printf("Warning: failed to delete file from filesystem: %v\n", err)
+	}
 
-    return s.gCodeFileRepo.Delete(fileID)
+	return s.gCodeFileRepo.Delete(fileID)
 }
 
 // StartExecution marks the start of operation plan execution
 func (s *OperationPlanService) StartExecution(planID uint) (*models.OperationPlan, error) {
-    plan, err := s.planRepo.FindByID(planID)
-    if err != nil {
-        return nil, errors.New("operation plan not found")
-    }
+	plan, err := s.planRepo.FindByID(planID)
+	if err != nil {
+		return nil, errors.New("operation plan not found")
+	}
 
-    if plan.Status != models.StatusApproved {
-        return nil, errors.New("operation plan must be approved before starting execution")
-    }
+	if plan.Status != models.StatusApproved {
+		return nil, errors.New("operation plan must be approved before starting execution")
+	}
 
-    now := time.Now()
-    plan.StartTime = &now
+	now := time.Now()
+	plan.StartTime = &now
 
-    if err := s.planRepo.Update(plan); err != nil {
-        return nil, errors.New("failed to update start time")
-    }
+	if err := s.planRepo.Update(plan); err != nil {
+		return nil, errors.New("failed to update start time")
+	}
 
-    return s.planRepo.FindByID(planID)
+	return s.planRepo.FindByID(planID)
 }
 
 // FinishExecution marks the finish of operation plan execution
 func (s *OperationPlanService) FinishExecution(planID uint) (*models.OperationPlan, error) {
-    plan, err := s.planRepo.FindByID(planID)
-    if err != nil {
-        return nil, errors.New("operation plan not found")
-    }
+	plan, err := s.planRepo.FindByID(planID)
+	if err != nil {
+		return nil, errors.New("operation plan not found")
+	}
 
-    if plan.StartTime == nil {
-        return nil, errors.New("operation plan execution has not started")
-    }
+	if plan.StartTime == nil {
+		return nil, errors.New("operation plan execution has not started")
+	}
 
-    now := time.Now()
-    plan.FinishTime = &now
+	now := time.Now()
+	plan.FinishTime = &now
 
-    if err := s.planRepo.Update(plan); err != nil {
-        return nil, errors.New("failed to update finish time")
-    }
+	if err := s.planRepo.Update(plan); err != nil {
+		return nil, errors.New("failed to update finish time")
+	}
 
-    return s.planRepo.FindByID(planID)
+	return s.planRepo.FindByID(planID)
 }

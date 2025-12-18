@@ -64,22 +64,22 @@ func AuthMiddleware(authService *services.AuthService) gin.HandlerFunc {
 	}
 }
 
-// RequireRole checks if the user has one of the required roles
+// RequireRole checks if the user has the required role
 func RequireRole(roles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userRole, ok := GetUserRole(c)
-		if !ok {
+		userRole, exists := c.Get("role")
+		if !exists {
 			c.JSON(http.StatusForbidden, gin.H{
-				"success": false,
-				"error":   "User role not found in context",
+				"error": "User role not found",
 			})
 			c.Abort()
 			return
 		}
 
+		roleStr := userRole.(string)
 		hasRole := false
 		for _, role := range roles {
-			if userRole == role {
+			if roleStr == role {
 				hasRole = true
 				break
 			}
@@ -87,8 +87,7 @@ func RequireRole(roles ...string) gin.HandlerFunc {
 
 		if !hasRole {
 			c.JSON(http.StatusForbidden, gin.H{
-				"success": false,
-				"error":   "Insufficient permissions. Required role: " + strings.Join(roles, " or "),
+				"error": "Insufficient permissions",
 			})
 			c.Abort()
 			return
@@ -96,9 +95,4 @@ func RequireRole(roles ...string) gin.HandlerFunc {
 
 		c.Next()
 	}
-}
-
-// RequireApprover checks if the user can approve operation plans
-func RequireApprover() gin.HandlerFunc {
-	return RequirePermission(PermissionOpPlanApprove)
 }

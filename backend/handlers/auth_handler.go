@@ -47,6 +47,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": err.Error(),
+			"message": "Email or password is incorrect",
 		})
 		return
 	}

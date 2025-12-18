@@ -14,11 +14,90 @@ func NewJobOrderRepository(db *sql.DB) *JobOrderRepository {
 	return &JobOrderRepository{db: db}
 }
 
+// nullableJobOrder holds nullable fields for safe scanning
+type nullableJobOrder struct {
+	ID           int64
+	MachineID    int64
+	MachineName  sql.NullString
+	NJO          string
+	Project      string
+	Item         string
+	Note         sql.NullString
+	Deadline     sql.NullString
+	OperatorID   sql.NullInt64
+	OperatorName sql.NullString
+	Status       string
+	CreatedAt    time.Time
+	CompletedAt  sql.NullTime
+	UpdatedAt    time.Time
+}
+
+// toJobOrder converts nullable fields to the model
+func (n *nullableJobOrder) toJobOrder() models.JobOrder {
+	j := models.JobOrder{
+		ID:        n.ID,
+		MachineID: n.MachineID,
+		NJO:       n.NJO,
+		Project:   n.Project,
+		Item:      n.Item,
+		Status:    n.Status,
+		CreatedAt: n.CreatedAt,
+		UpdatedAt: n.UpdatedAt,
+	}
+
+	if n.MachineName.Valid {
+		j.MachineName = n.MachineName.String
+	}
+	if n.Note.Valid {
+		j.Note = n.Note.String
+	}
+	if n.Deadline.Valid {
+		j.Deadline = n.Deadline.String
+	}
+	if n.OperatorID.Valid {
+		id := n.OperatorID.Int64
+		j.OperatorID = &id
+	}
+	if n.OperatorName.Valid {
+		j.OperatorName = n.OperatorName.String
+	}
+	if n.CompletedAt.Valid {
+		j.CompletedAt = &n.CompletedAt.Time
+	}
+
+	return j
+}
+
+// scanJobOrder scans a row into a nullableJobOrder and converts it
+func scanJobOrder(scanner interface{ Scan(...any) error }) (models.JobOrder, error) {
+	var n nullableJobOrder
+	err := scanner.Scan(
+		&n.ID,
+		&n.MachineID,
+		&n.MachineName,
+		&n.NJO,
+		&n.Project,
+		&n.Item,
+		&n.Note,
+		&n.Deadline,
+		&n.OperatorID,
+		&n.OperatorName,
+		&n.Status,
+		&n.CreatedAt,
+		&n.CompletedAt,
+		&n.UpdatedAt,
+	)
+	if err != nil {
+		return models.JobOrder{}, err
+	}
+	return n.toJobOrder(), nil
+}
+
 // GetAll retrieves all job orders with machine and operator info
 func (r *JobOrderRepository) GetAll() ([]models.JobOrder, error) {
 	query := `
 		SELECT 
-			jo.id, jo.machine_id, m.machine_name, jo.njo, jo.project, jo.item, 
+			jo.id, jo.machine_id, COALESCE(m.machine_name, ''), jo.njo, jo.project, jo.item, 
 			jo.note, jo.deadline, jo.operator_id, u.username, jo.status, 
 			jo.created_at, jo.completed_at, jo.updated_at
 		FROM job_orders jo
@@ -36,115 +115,25 @@ func (r *JobOrderRepository) GetAll() ([]models.JobOrder, error) {
 
 	var jobs []models.JobOrder
 	for rows.Next() {
-		var j models.JobOrder
-		err := rows.Scan(
-			&j.ID,
-			&j.MachineID,
-			&j.MachineName,
-			&j.NJO,
-			&j.Project,
-			&j.Item,
-			&j.Note,
-			&j.Deadline,
-			&j.OperatorID,
-			&j.OperatorName,
-			&j.Status,
-			&j.CreatedAt,
-			&j.CompletedAt,
-			&j.UpdatedAt,
-		)
+		j, err := scanJobOrder(rows)
 		if err != nil {
 			return nil, err
 		}
 		jobs = append(jobs, j)
 	}
 
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return jobs, nil
-}
-
-// GetAllPaginated retrieves job orders with pagination
-func (r *JobOrderRepository) GetAllPaginated(limit, offset int, sortField, sortOrder string) ([]models.JobOrder, int64, error) {
-	// Whitelist allowed sort fields to prevent SQL injection
-	allowedSortFields := map[string]string{
-		"id":         "jo.id",
-		"njo":        "jo.njo",
-		"project":    "jo.project",
-		"item":       "jo.item",
-		"deadline":   "jo.deadline",
-		"status":     "jo.status",
-		"created_at": "jo.created_at",
-		"updated_at": "jo.updated_at",
-	}
-
-	sortColumn, ok := allowedSortFields[sortField]
-	if !ok {
-		sortColumn = "jo.created_at"
-	}
-	if sortOrder != "asc" && sortOrder != "desc" {
-		sortOrder = "desc"
-	}
-
-	// Get total count
-	var total int64
-	countQuery := `SELECT COUNT(*) FROM job_orders jo WHERE jo.deleted_at IS NULL`
-	err := r.db.QueryRow(countQuery).Scan(&total)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	// Get paginated data
-	query := `
-		SELECT 
-			jo.id, jo.machine_id, m.machine_name, jo.njo, jo.project, jo.item, 
-			jo.note, jo.deadline, jo.operator_id, u.username, jo.status, 
-			jo.created_at, jo.completed_at, jo.updated_at
-		FROM job_orders jo
-		LEFT JOIN machines m ON m.id = jo.machine_id
-		LEFT JOIN users u ON u.id = jo.operator_id
-		WHERE jo.deleted_at IS NULL
-		ORDER BY ` + sortColumn + ` ` + sortOrder + `
-		LIMIT $1 OFFSET $2
-	`
-
-	rows, err := r.db.Query(query, limit, offset)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-
-	var jobs []models.JobOrder
-	for rows.Next() {
-		var j models.JobOrder
-		err := rows.Scan(
-			&j.ID,
-			&j.MachineID,
-			&j.MachineName,
-			&j.NJO,
-			&j.Project,
-			&j.Item,
-			&j.Note,
-			&j.Deadline,
-			&j.OperatorID,
-			&j.OperatorName,
-			&j.Status,
-			&j.CreatedAt,
-			&j.CompletedAt,
-			&j.UpdatedAt,
-		)
-		if err != nil {
-			return nil, 0, err
-		}
-		jobs = append(jobs, j)
-	}
-
-	return jobs, total, nil
 }
 
 // GetByID retrieves a job order by ID with stages
 func (r *JobOrderRepository) GetByID(id int64) (*models.JobOrder, error) {
 	query := `
 		SELECT 
-			jo.id, jo.machine_id, m.machine_name, jo.njo, jo.project, jo.item, 
+			jo.id, jo.machine_id, COALESCE(m.machine_name, ''), jo.njo, jo.project, jo.item, 
 			jo.note, jo.deadline, jo.operator_id, u.username, jo.status, 
 			jo.created_at, jo.completed_at, jo.updated_at
 		FROM job_orders jo
@@ -153,24 +142,7 @@ func (r *JobOrderRepository) GetByID(id int64) (*models.JobOrder, error) {
 		WHERE jo.id = $1 AND jo.deleted_at IS NULL
 	`
 
-	var j models.JobOrder
-	err := r.db.QueryRow(query, id).Scan(
-		&j.ID,
-		&j.MachineID,
-		&j.MachineName,
-		&j.NJO,
-		&j.Project,
-		&j.Item,
-		&j.Note,
-		&j.Deadline,
-		&j.OperatorID,
-		&j.OperatorName,
-		&j.Status,
-		&j.CreatedAt,
-		&j.CompletedAt,
-		&j.UpdatedAt,
-	)
-
+	j, err := scanJobOrder(r.db.QueryRow(query, id))
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -192,7 +164,7 @@ func (r *JobOrderRepository) GetByID(id int64) (*models.JobOrder, error) {
 func (r *JobOrderRepository) GetByMachineID(machineID int64) ([]models.JobOrder, error) {
 	query := `
 		SELECT 
-			jo.id, jo.machine_id, m.machine_name, jo.njo, jo.project, jo.item, 
+			jo.id, jo.machine_id, COALESCE(m.machine_name, ''), jo.njo, jo.project, jo.item, 
 			jo.note, jo.deadline, jo.operator_id, u.username, jo.status, 
 			jo.created_at, jo.completed_at, jo.updated_at
 		FROM job_orders jo
@@ -210,27 +182,15 @@ func (r *JobOrderRepository) GetByMachineID(machineID int64) ([]models.JobOrder,
 
 	var jobs []models.JobOrder
 	for rows.Next() {
-		var j models.JobOrder
-		err := rows.Scan(
-			&j.ID,
-			&j.MachineID,
-			&j.MachineName,
-			&j.NJO,
-			&j.Project,
-			&j.Item,
-			&j.Note,
-			&j.Deadline,
-			&j.OperatorID,
-			&j.OperatorName,
-			&j.Status,
-			&j.CreatedAt,
-			&j.CompletedAt,
-			&j.UpdatedAt,
-		)
+		j, err := scanJobOrder(rows)
 		if err != nil {
 			return nil, err
 		}
 		jobs = append(jobs, j)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return jobs, nil
@@ -251,7 +211,21 @@ func (r *JobOrderRepository) Create(req *models.CreateJobOrderRequest) (*models.
 		RETURNING id, machine_id, njo, project, item, note, deadline, operator_id, status, created_at, updated_at
 	`
 
-	var j models.JobOrder
+	// Use nullable types for scanning RETURNING clause
+	var (
+		id         int64
+		machineID  int64
+		njo        string
+		project    string
+		item       string
+		note       sql.NullString
+		deadline   sql.NullString
+		operatorID sql.NullInt64
+		status     string
+		createdAt  time.Time
+		updatedAt  time.Time
+	)
+
 	err = tx.QueryRow(
 		query,
 		req.MachineID,
@@ -262,21 +236,43 @@ func (r *JobOrderRepository) Create(req *models.CreateJobOrderRequest) (*models.
 		req.Deadline,
 		req.OperatorID,
 	).Scan(
-		&j.ID,
-		&j.MachineID,
-		&j.NJO,
-		&j.Project,
-		&j.Item,
-		&j.Note,
-		&j.Deadline,
-		&j.OperatorID,
-		&j.Status,
-		&j.CreatedAt,
-		&j.UpdatedAt,
+		&id,
+		&machineID,
+		&njo,
+		&project,
+		&item,
+		&note,
+		&deadline,
+		&operatorID,
+		&status,
+		&createdAt,
+		&updatedAt,
 	)
 
 	if err != nil {
 		return nil, err
+	}
+
+	// Build JobOrder from scanned values
+	j := models.JobOrder{
+		ID:        id,
+		MachineID: machineID,
+		NJO:       njo,
+		Project:   project,
+		Item:      item,
+		Status:    status,
+		CreatedAt: createdAt,
+		UpdatedAt: updatedAt,
+	}
+	if note.Valid {
+		j.Note = note.String
+	}
+	if deadline.Valid {
+		j.Deadline = deadline.String
+	}
+	if operatorID.Valid {
+		opID := operatorID.Int64
+		j.OperatorID = &opID
 	}
 
 	// Create default process stages (setting, proses, cmm, kalibrasi)
@@ -309,7 +305,21 @@ func (r *JobOrderRepository) Update(id int64, req *models.UpdateJobOrderRequest)
 		RETURNING id, machine_id, njo, project, item, note, deadline, operator_id, status, created_at, updated_at
 	`
 
-	var j models.JobOrder
+	// Use nullable types for scanning RETURNING clause
+	var (
+		jobID      int64
+		machineID  int64
+		njo        string
+		project    string
+		item       string
+		note       sql.NullString
+		deadline   sql.NullString
+		operatorID sql.NullInt64
+		status     string
+		createdAt  time.Time
+		updatedAt  time.Time
+	)
+
 	err := r.db.QueryRow(
 		query,
 		req.Project,
@@ -321,17 +331,17 @@ func (r *JobOrderRepository) Update(id int64, req *models.UpdateJobOrderRequest)
 		time.Now(),
 		id,
 	).Scan(
-		&j.ID,
-		&j.MachineID,
-		&j.NJO,
-		&j.Project,
-		&j.Item,
-		&j.Note,
-		&j.Deadline,
-		&j.OperatorID,
-		&j.Status,
-		&j.CreatedAt,
-		&j.UpdatedAt,
+		&jobID,
+		&machineID,
+		&njo,
+		&project,
+		&item,
+		&note,
+		&deadline,
+		&operatorID,
+		&status,
+		&createdAt,
+		&updatedAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -339,6 +349,28 @@ func (r *JobOrderRepository) Update(id int64, req *models.UpdateJobOrderRequest)
 	}
 	if err != nil {
 		return nil, err
+	}
+
+	// Build JobOrder from scanned values
+	j := models.JobOrder{
+		ID:        jobID,
+		MachineID: machineID,
+		NJO:       njo,
+		Project:   project,
+		Item:      item,
+		Status:    status,
+		CreatedAt: createdAt,
+		UpdatedAt: updatedAt,
+	}
+	if note.Valid {
+		j.Note = note.String
+	}
+	if deadline.Valid {
+		j.Deadline = deadline.String
+	}
+	if operatorID.Valid {
+		opID := operatorID.Int64
+		j.OperatorID = &opID
 	}
 
 	return &j, nil
@@ -369,6 +401,76 @@ func (r *JobOrderRepository) Delete(id int64) error {
 	return nil
 }
 
+// nullableProcessStage holds nullable fields for safe scanning
+type nullableProcessStage struct {
+	ID              int64
+	JobOrderID      int64
+	StageName       string
+	StartTime       sql.NullTime
+	FinishTime      sql.NullTime
+	DurationMinutes sql.NullFloat64
+	OperatorID      sql.NullInt64
+	OperatorName    sql.NullString
+	Notes           sql.NullString
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+// toProcessStage converts nullable fields to the model
+func (n *nullableProcessStage) toProcessStage() models.ProcessStage {
+	s := models.ProcessStage{
+		ID:         n.ID,
+		JobOrderID: n.JobOrderID,
+		StageName:  n.StageName,
+		CreatedAt:  n.CreatedAt,
+		UpdatedAt:  n.UpdatedAt,
+	}
+
+	if n.StartTime.Valid {
+		s.StartTime = &n.StartTime.Time
+	}
+	if n.FinishTime.Valid {
+		s.FinishTime = &n.FinishTime.Time
+	}
+	if n.DurationMinutes.Valid {
+		s.DurationMinutes = &n.DurationMinutes.Float64
+	}
+	if n.OperatorID.Valid {
+		id := n.OperatorID.Int64
+		s.OperatorID = &id
+	}
+	if n.OperatorName.Valid {
+		s.OperatorName = n.OperatorName.String
+	}
+	if n.Notes.Valid {
+		s.Notes = n.Notes.String
+	}
+
+	return s
+}
+
+// scanProcessStage scans a row into a nullableProcessStage and converts it
+func scanProcessStage(scanner interface{ Scan(...any) error }) (models.ProcessStage, error) {
+	var n nullableProcessStage
+	err := scanner.Scan(
+		&n.ID,
+		&n.JobOrderID,
+		&n.StageName,
+		&n.StartTime,
+		&n.FinishTime,
+		&n.DurationMinutes,
+		&n.OperatorID,
+		&n.OperatorName,
+		&n.Notes,
+		&n.CreatedAt,
+		&n.UpdatedAt,
+	)
+	if err != nil {
+		return models.ProcessStage{}, err
+	}
+	return n.toProcessStage(), nil
+}
+
 // GetProcessStages retrieves all process stages for a job order
 func (r *JobOrderRepository) GetProcessStages(jobOrderID int64) ([]models.ProcessStage, error) {
 	query := `
@@ -396,24 +498,15 @@ func (r *JobOrderRepository) GetProcessStages(jobOrderID int64) ([]models.Proces
 
 	var stages []models.ProcessStage
 	for rows.Next() {
-		var s models.ProcessStage
-		err := rows.Scan(
-			&s.ID,
-			&s.JobOrderID,
-			&s.StageName,
-			&s.StartTime,
-			&s.FinishTime,
-			&s.DurationMinutes,
-			&s.OperatorID,
-			&s.OperatorName,
-			&s.Notes,
-			&s.CreatedAt,
-			&s.UpdatedAt,
-		)
+		s, err := scanProcessStage(rows)
 		if err != nil {
 			return nil, err
 		}
 		stages = append(stages, s)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return stages, nil
@@ -428,7 +521,8 @@ func (r *JobOrderRepository) UpdateProcessStage(stageID int64, req *models.Updat
 		RETURNING id, job_order_id, stage_name, start_time, finish_time, duration_minutes, operator_id, notes, created_at, updated_at
 	`
 
-	var s models.ProcessStage
+	// Use nullable scanner for RETURNING clause
+	var n nullableProcessStage
 	err := r.db.QueryRow(
 		query,
 		req.StartTime,
@@ -438,16 +532,16 @@ func (r *JobOrderRepository) UpdateProcessStage(stageID int64, req *models.Updat
 		time.Now(),
 		stageID,
 	).Scan(
-		&s.ID,
-		&s.JobOrderID,
-		&s.StageName,
-		&s.StartTime,
-		&s.FinishTime,
-		&s.DurationMinutes,
-		&s.OperatorID,
-		&s.Notes,
-		&s.CreatedAt,
-		&s.UpdatedAt,
+		&n.ID,
+		&n.JobOrderID,
+		&n.StageName,
+		&n.StartTime,
+		&n.FinishTime,
+		&n.DurationMinutes,
+		&n.OperatorID,
+		&n.Notes,
+		&n.CreatedAt,
+		&n.UpdatedAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -457,5 +551,6 @@ func (r *JobOrderRepository) UpdateProcessStage(stageID int64, req *models.Updat
 		return nil, err
 	}
 
+	s := n.toProcessStage()
 	return &s, nil
 }

@@ -3,28 +3,27 @@ package middleware
 import (
 	"net/http"
 
-	"ganttpro-backend/models"
-
 	"github.com/gin-gonic/gin"
 )
 
-// RequireAdmin middleware ensures the user has Admin role
+// RequireAdmin middleware memastikan user memiliki role Admin
 func RequireAdmin() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		role, ok := GetUserRole(c)
-		if !ok {
+		// Get user role from context (set by auth middleware)
+		role, exists := c.Get("role")
+		if !exists {
 			c.JSON(http.StatusUnauthorized, gin.H{
-				"success": false,
-				"error":   "Unauthorized - user role not found",
+				"error": "Unauthorized",
 			})
 			c.Abort()
 			return
 		}
 
-		if role != models.RoleAdmin {
+		// Check if role is Admin
+		roleStr, ok := role.(string)
+		if !ok || roleStr != "Admin" {
 			c.JSON(http.StatusForbidden, gin.H{
-				"success": false,
-				"error":   "Access denied. Admin role required.",
+				"error": "Access denied. Admin role required.",
 			})
 			c.Abort()
 			return

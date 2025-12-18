@@ -44,21 +44,30 @@ func main() {
 	machineRepo := repository.NewMachineRepository(sqlDB)
 	jobOrderRepo := repository.NewJobOrderRepository(sqlDB)
 	ppicScheduleRepo := repository.NewPPICScheduleRepository(sqlDB)
-
 	tokenBlacklistRepo := repository.NewTokenBlacklistRepository(db)
 	opPlanRepo := repository.NewOperationPlanRepository(db)
 	gcodeRepo := repository.NewGCodeFileRepository(db)
+
 	uploadPath := "./uploads/gcodes"
 
 	// Initialize services
 	authService := services.NewAuthService(userRepo, tokenBlacklistRepo, cfg)
-	opPlanService := services.NewOperationPlanService(opPlanRepo, gcodeRepo, jobOrderRepo)
+	emailService := services.NewEmailService(cfg)
+	opPlanService := services.NewOperationPlanService(opPlanRepo, gcodeRepo, jobOrderRepo, userRepo, emailService)
 	gcodeService := services.NewGCodeService(gcodeRepo, opPlanRepo, uploadPath)
 	ganttService := services.NewGanttService(ppicScheduleRepo)
 
-	// Initialize and start cleanup service (cleans expired tokens hourly)
+	// Initialize and start cleanup service (cleans expired tokens every hour)
 	cleanupService := services.NewCleanupService(tokenBlacklistRepo, services.DefaultCleanupConfig())
 	cleanupService.Start()
+	log.Println("Cleanup service: STARTED")
+
+	// Log email service status
+	if emailService.IsConfigured() {
+		log.Println("Email service: CONFIGURED")
+	} else {
+		log.Println("Email service: NOT CONFIGURED (set SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM_ADDR)")
+	}
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService)
@@ -68,13 +77,14 @@ func main() {
 	opPlanHandler := handlers.NewOperationPlanHandler(opPlanService)
 	gcodeHandler := handlers.NewGCodeHandler(gcodeService)
 	ganttHandler := handlers.NewGanttHandler(ganttService)
+	emailHandler := handlers.NewEmailHandler(emailService, opPlanRepo, userRepo)
 
 	// Setup Gin router
 	router := gin.Default()
 	router.Use(middleware.CORS(cfg))
 
-	// Setup routes
-	routes.SetupRoutes(
+	// Setup routes and get rate limiters for graceful shutdown
+	rateLimiters := routes.SetupRoutes(
 		router,
 		authHandler,
 		machineHandler,
@@ -83,6 +93,7 @@ func main() {
 		opPlanHandler,
 		gcodeHandler,
 		ganttHandler,
+		emailHandler,
 		authService,
 	)
 
@@ -93,13 +104,17 @@ func main() {
 
 	// Create HTTP server
 	srv := &http.Server{
-		Addr:    ":" + cfg.Port,
-		Handler: router,
+		Addr:         ":" + cfg.Port,
+		Handler:      router,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	// Start server in a goroutine
 	go func() {
 		log.Printf("Server starting on port %s", cfg.Port)
+		
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start server: %v", err)
 		}
@@ -119,10 +134,16 @@ func main() {
 	if err := cleanupService.Stop(ctx); err != nil {
 		log.Printf("Cleanup service shutdown error: %v", err)
 	}
+	log.Println("Cleanup service stopped")
+
+	// Stop rate limiters
+	rateLimiters.Stop()
+	log.Println("Rate limiters stopped")
 
 	// Shutdown HTTP server
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatalf("Server forced to shutdown: %v", err)
+
 	}
 
 	// Close database connection
