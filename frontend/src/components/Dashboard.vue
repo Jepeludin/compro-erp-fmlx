@@ -210,10 +210,10 @@ const handleCardClick = (card) => {
     }
   } else {
     // For other routes, show coming soon alert or navigate
-    alert(`Navigating to ${card.title}...\nRoute: ${card.route}\n\nFitur ini akan segera tersedia!`);
+    // alert(`Navigating to ${card.title}...\nRoute: ${card.route}\n\nFitur ini akan segera tersedia!`);
     
     // Uncomment untuk navigasi real
-    // router.push(card.route);
+    router.push(card.route);
   }
 };
 
