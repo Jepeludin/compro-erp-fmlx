@@ -23,9 +23,9 @@ CREATE TABLE IF NOT EXISTS ppic_schedules (
 -- Create machine_assignments table
 CREATE TABLE IF NOT EXISTS machine_assignments (
     id BIGSERIAL PRIMARY KEY,
-    ppic_schedule_id BIGINT NOT NULL REFERENCES ppic_schedules(id) ON DELETE CASCADE,
+    schedule_id BIGINT NOT NULL REFERENCES ppic_schedules(id) ON DELETE CASCADE,
     machine_id BIGINT NOT NULL REFERENCES machines(id),
-    target_hours DECIMAL(10, 2) NOT NULL,
+    target_hours DECIMAL(10, 2) NOT NULL DEFAULT 0,
     scheduled_start TIMESTAMP WITH TIME ZONE,
     scheduled_end TIMESTAMP WITH TIME ZONE,
     actual_start TIMESTAMP WITH TIME ZONE,
@@ -44,7 +44,7 @@ CREATE INDEX IF NOT EXISTS idx_ppic_schedules_priority ON ppic_schedules(priorit
 CREATE INDEX IF NOT EXISTS idx_ppic_schedules_status ON ppic_schedules(status);
 CREATE INDEX IF NOT EXISTS idx_ppic_schedules_deleted_at ON ppic_schedules(deleted_at);
 
-CREATE INDEX IF NOT EXISTS idx_machine_assignments_ppic_schedule_id ON machine_assignments(ppic_schedule_id);
+CREATE INDEX IF NOT EXISTS idx_machine_assignments_schedule_id ON machine_assignments(schedule_id);
 CREATE INDEX IF NOT EXISTS idx_machine_assignments_machine_id ON machine_assignments(machine_id);
 CREATE INDEX IF NOT EXISTS idx_machine_assignments_status ON machine_assignments(status);
 

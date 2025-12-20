@@ -6,21 +6,24 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Default pagination values
+const (
+	DefaultPage     = 1
+	DefaultPageSize = 20
+	MaxPageSize     = 100
+	DefaultSort     = "created_at"
+	DefaultOrder    = "desc"
+)
+
 // PaginationParams holds pagination parameters
 type PaginationParams struct {
 	Page     int    `json:"page"`
 	PageSize int    `json:"page_size"`
 	Sort     string `json:"sort"`
-	Order    string `json:"order"` // asc or desc
+	Order    string `json:"order"`
 }
 
-// PaginatedResponse represents a paginated API response
-type PaginatedResponse struct {
-	Data       interface{} `json:"data"`
-	Pagination Pagination  `json:"pagination"`
-}
-
-// Pagination contains pagination metadata
+// Pagination contains pagination metadata for response
 type Pagination struct {
 	CurrentPage int   `json:"current_page"`
 	PageSize    int   `json:"page_size"`
@@ -30,14 +33,11 @@ type Pagination struct {
 	HasPrev     bool  `json:"has_prev"`
 }
 
-// Default pagination values
-const (
-	DefaultPage     = 1
-	DefaultPageSize = 20
-	MaxPageSize     = 100
-	DefaultSort     = "created_at"
-	DefaultOrder    = "desc"
-)
+// PaginatedResponse represents a paginated API response
+type PaginatedResponse struct {
+	Data       interface{} `json:"data"`
+	Pagination Pagination  `json:"pagination"`
+}
 
 // GetPaginationParams extracts pagination parameters from query string
 func GetPaginationParams(c *gin.Context) PaginationParams {
@@ -111,3 +111,5 @@ func NewPaginatedResponse(data interface{}, params PaginationParams, totalItems 
 		Pagination: BuildPagination(params, totalItems),
 	}
 }
+
+

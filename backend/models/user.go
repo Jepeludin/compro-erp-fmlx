@@ -73,6 +73,7 @@ type User struct {
 	ID        uint           `gorm:"primaryKey;autoIncrement" json:"id"`
 	Username  string         `gorm:"uniqueIndex;not null;size:50" json:"username"` // e.g., BAYU, Amelia
 	UserID    string         `gorm:"uniqueIndex;not null;size:50" json:"user_id"`  // e.g., PI0824.2374
+	Email     string         `gorm:"uniqueIndex;not null;size:100" json:"email"`   // User email for notifications
 	Password  string         `gorm:"not null" json:"-"`                            // Hashed password
 	Role      string         `gorm:"size:20;default:'PPIC'" json:"role"`           // Admin, PPIC, etc.
 	Operator  string         `gorm:"size:50" json:"operator"`                      // Operator field
@@ -92,6 +93,7 @@ type UserResponse struct {
 	ID        uint      `json:"id"`
 	Username  string    `json:"username"`
 	UserID    string    `json:"user_id"`
+	Email     string    `json:"email"`
 	Role      string    `json:"role"`
 	Operator  string    `json:"operator"`
 	IsActive  bool      `json:"is_active"`
@@ -104,6 +106,7 @@ func (u *User) ToResponse() UserResponse {
 		ID:        u.ID,
 		Username:  u.Username,
 		UserID:    u.UserID,
+		Email:     u.Email,
 		Role:      u.Role,
 		Operator:  u.Operator,
 		IsActive:  u.IsActive,
