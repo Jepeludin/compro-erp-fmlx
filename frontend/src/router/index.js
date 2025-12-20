@@ -1,11 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import LoginPage from '../components/LoginPage.vue';
 import Dashboard from '../components/Dashboard.vue';
-import AdminLayout from '../components/AdminLayout.vue';
-import AdminPage from '../components/AdminPage.vue';
-import AdminMachine from '../components/AdminMachine.vue';
-import AdminSchedule from '../components/AdminSchedule.vue';
+import AdminLayout from '../components/Admin/AdminLayout.vue';
+import AdminPage from '../components/Admin/AdminPage.vue';
+import AdminMachine from '../components/Admin/AdminMachine.vue';
+import AdminSchedule from '../components/Admin/AdminSchedule.vue';
 import api from '../services/api.js';
+import PPIC from '../components/PPIC/ppic.vue';
+
+import GanttchartTest from '../components/Ganttchart-Test.vue';
 
 // Role-based access control configuration
 const rolePermissions = {
@@ -40,7 +43,7 @@ const routes = [
   {
     path: '/ppic',
     name: 'PPIC',
-    component: () => import('../components/Dashboard.vue'),
+    component: PPIC,
     meta: { requiresAuth: true, allowedRoles: ['Admin', 'PPIC'] }
   },
   {
@@ -101,6 +104,12 @@ const routes = [
     name: 'ReportTrack',
     component: () => import('../components/Dashboard.vue'),
     meta: { requiresAuth: true, allowedRoles: ['Admin', 'PPIC', 'Toolpather', 'PEM', 'QC', 'Engineering', 'Guest'] }
+  },
+  {
+    path: '/ganttchart',
+    name: 'GanttchartTest',
+    component: GanttchartTest,
+    meta: { requiresAuth: false }
   }
 ];
 
