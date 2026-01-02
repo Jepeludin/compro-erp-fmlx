@@ -222,6 +222,89 @@ class ApiService {
       body: JSON.stringify(stageData),
     });
   }
+
+  // PPIC Schedule endpoints
+  async getAllPPICSchedules() {
+    return this.request('/ppic-schedules', {
+      method: 'GET',
+      auth: true,
+    });
+  }
+
+  async getPPICSchedule(scheduleId) {
+    return this.request(`/ppic-schedules/${scheduleId}`, {
+      method: 'GET',
+      auth: true,
+    });
+  }
+
+  async createPPICSchedule(scheduleData) {
+    // scheduleData: { njo, part_name, priority, priority_alpha, material_status,
+    //                 start_date, finish_date, ppic_notes, machine_assignments }
+    return this.request('/ppic-schedules', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify(scheduleData),
+    });
+  }
+
+  async updatePPICSchedule(scheduleId, scheduleData) {
+    // scheduleData: { part_name, priority, material_status, status, progress,
+    //                 start_date, finish_date, ppic_notes, machine_assignments }
+    return this.request(`/ppic-schedules/${scheduleId}`, {
+      method: 'PUT',
+      auth: true,
+      body: JSON.stringify(scheduleData),
+    });
+  }
+
+  async deletePPICSchedule(scheduleId) {
+    return this.request(`/ppic-schedules/${scheduleId}`, {
+      method: 'DELETE',
+      auth: true,
+    });
+  }
+
+  async getSchedulesByMachine(machineId) {
+    return this.request(`/ppic-schedules/machine/${machineId}`, {
+      method: 'GET',
+      auth: true,
+    });
+  }
+
+  // Gantt Chart endpoint
+  async getGanttChart(filters = {}) {
+    const params = new URLSearchParams(filters).toString();
+    const endpoint = params ? `/gantt-chart?${params}` : '/gantt-chart';
+    return this.request(endpoint, {
+      method: 'GET',
+      auth: true,
+    });
+  }
+
+  // PPIC Links endpoints
+  async createPPICLink(linkData) {
+    // linkData: { source_schedule_id, target_schedule_id, link_type }
+    return this.request('/ppic-links', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify(linkData),
+    });
+  }
+
+  async deletePPICLink(linkId) {
+    return this.request(`/ppic-links/${linkId}`, {
+      method: 'DELETE',
+      auth: true,
+    });
+  }
+
+  async getAllPPICLinks() {
+    return this.request('/ppic-links', {
+      method: 'GET',
+      auth: true,
+    });
+  }
 }
 
 export default new ApiService();

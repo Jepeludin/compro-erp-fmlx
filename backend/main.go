@@ -44,6 +44,7 @@ func main() {
 	machineRepo := repository.NewMachineRepository(sqlDB)
 	jobOrderRepo := repository.NewJobOrderRepository(sqlDB)
 	ppicScheduleRepo := repository.NewPPICScheduleRepository(sqlDB)
+	ppicLinkRepo := repository.NewPPICLinkRepository(db)
 	tokenBlacklistRepo := repository.NewTokenBlacklistRepository(db)
 	opPlanRepo := repository.NewOperationPlanRepository(db)
 	gcodeRepo := repository.NewGCodeFileRepository(db)
@@ -55,7 +56,8 @@ func main() {
 	emailService := services.NewEmailService(cfg)
 	opPlanService := services.NewOperationPlanService(opPlanRepo, gcodeRepo, jobOrderRepo, userRepo, emailService)
 	gcodeService := services.NewGCodeService(gcodeRepo, opPlanRepo, uploadPath)
-	ganttService := services.NewGanttService(ppicScheduleRepo)
+	ganttService := services.NewGanttService(ppicScheduleRepo, ppicLinkRepo)
+	ppicLinkService := services.NewPPICLinkService(ppicLinkRepo, ppicScheduleRepo)
 
 	// Initialize and start cleanup service (cleans expired tokens every hour)
 	cleanupService := services.NewCleanupService(tokenBlacklistRepo, services.DefaultCleanupConfig())
@@ -77,6 +79,7 @@ func main() {
 	opPlanHandler := handlers.NewOperationPlanHandler(opPlanService)
 	gcodeHandler := handlers.NewGCodeHandler(gcodeService)
 	ganttHandler := handlers.NewGanttHandler(ganttService)
+	ppicLinkHandler := handlers.NewPPICLinkHandler(ppicLinkService)
 	emailHandler := handlers.NewEmailHandler(emailService, opPlanRepo, userRepo)
 
 	// Setup Gin router
@@ -93,6 +96,7 @@ func main() {
 		opPlanHandler,
 		gcodeHandler,
 		ganttHandler,
+		ppicLinkHandler,
 		emailHandler,
 		authService,
 	)

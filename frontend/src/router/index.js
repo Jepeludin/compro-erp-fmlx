@@ -7,6 +7,7 @@ import AdminMachine from '../components/Admin/AdminMachine.vue';
 import AdminSchedule from '../components/Admin/AdminSchedule.vue';
 import api from '../services/api.js';
 import PPIC from '../components/PPIC/ppic.vue';
+import TimeTrack from '../components/TimeTrack/TimeTrack.vue';
 
 import GanttchartTest from '../components/Ganttchart-Test.vue';
 
@@ -96,7 +97,7 @@ const routes = [
   {
     path: '/timetrack',
     name: 'TimeTrack',
-    component: () => import('../components/Dashboard.vue'),
+    component: TimeTrack,
     meta: { requiresAuth: true, allowedRoles: ['Admin', 'PPIC', 'Toolpather', 'PEM', 'QC', 'Engineering', 'Guest'] }
   },
   {

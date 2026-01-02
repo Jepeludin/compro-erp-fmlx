@@ -107,7 +107,7 @@
     padding: 20px;
     display: flex;
     flex-direction: column;
-    overflow: hidden; 
+    overflow: hidden;
     box-sizing: border-box;
 }
 
@@ -121,17 +121,267 @@
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
-
 .gantt-container > div {
     width: 100%;
     height: 100%;
 }
 
+/* ========================================
+   GANTT GRID HEADER STYLING
+   ======================================== */
+
 .gantt_grid_head_cell {
     font-weight: bold !important;
     color: #475569 !important;
+    background-color: #f8fafc !important;
+    border-right: 1px solid #e2e8f0 !important;
 }
 
+/* ========================================
+   SCALE/TIMELINE STYLING - PERBAIKAN UTAMA
+   ======================================== */
+
+/* Scale container background */
+.gantt_task_scale {
+    background-color: #f8fafc !important;
+}
+
+/* =====================================================
+   MONTH SCALE (Baris pertama) - JANGAN PAKSA FIXED WIDTH
+   ===================================================== */
+.gantt_scale_line:first-child .gantt_scale_cell,
+.scale_month,
+.month_scale_cell {
+    /* PENTING: Jangan set fixed width untuk month! */
+    /* Biarkan auto-expand berdasarkan jumlah hari */
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+    font-weight: 600 !important;
+    font-size: 13px !important;
+    color: #334155 !important;
+    background-color: #f1f5f9 !important;
+    border-right: 1px solid #cbd5e1 !important;
+    border-bottom: 1px solid #cbd5e1 !important;
+    text-align: center !important;
+    padding: 0 8px !important;
+}
+
+/* =====================================================
+   DAY SCALE (Baris kedua) - Bisa dikecilkan
+   ===================================================== */
+.gantt_scale_line:last-child .gantt_scale_cell,
+.scale_day,
+.day_scale_cell {
+    /* Day cells bisa dikecilkan */
+    min-width: 25px !important;
+    font-weight: 500 !important;
+    font-size: 12px !important;
+    color: #64748b !important;
+    background-color: #f8fafc !important;
+    border-right: 1px solid #e2e8f0 !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    text-align: center !important;
+}
+
+/* Weekend scale cells */
+.weekend,
+.weekend_scale {
+    background-color: #fef3c7 !important;
+}
+
+/* ========================================
+   TASK ROW & CELL STYLING
+   ======================================== */
+
+/* Task cells - match day column width */
+.gantt_task_cell {
+    min-width: 25px !important;
+    border-right: 1px solid #f0f0f0 !important;
+}
+
+/* Task rows */
+.gantt_task_row {
+    border-bottom: 1px solid #e8e8e8 !important;
+    height: 36px !important;
+    min-height: 36px !important;
+}
+
+/* Grid rows */
+.gantt_row {
+    height: 36px !important;
+    min-height: 36px !important;
+    border-bottom: 1px solid #e8e8e8 !important;
+}
+
+/* Odd rows - zebra striping */
+.gantt_row.odd,
+.gantt_task_row.odd {
+    background-color: #fafbfc !important;
+}
+
+/* Weekend task cells */
+.weekend_cell {
+    background-color: #fffbeb !important;
+}
+
+/* ========================================
+   TASK BAR STYLING
+   ======================================== */
+
+.gantt_task_line {
+    border: 1px solid rgba(0, 0, 0, 0.15) !important;
+    border-radius: 4px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+    height: 22px !important;
+    line-height: 22px !important;
+    margin-top: 7px !important;
+}
+
+.gantt_task_content {
+    font-weight: 600 !important;
+    font-size: 11px !important;
+    color: #ffffff !important;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2) !important;
+    padding: 0 8px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
+
+.gantt_task_line:hover {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Progress bar */
+.gantt_task_progress {
+    background-color: rgba(0, 0, 0, 0.15) !important;
+    border-radius: 4px !important;
+}
+
+/* Project type task */
 .gantt_task_line.gantt_project {
     background-color: #5d87ff !important;
+}
+
+/* ========================================
+   DELETE BUTTON STYLING
+   ======================================== */
+
+.gantt_delete {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #64748b;
+    transition: all 0.2s ease;
+}
+
+.gantt_delete:hover {
+    color: #ef4444;
+    background-color: #fef2f2;
+}
+
+.gantt_delete i::before {
+    content: "🗑️";
+    font-style: normal;
+    font-size: 14px;
+}
+
+/* ========================================
+   LINK/DEPENDENCY ARROW STYLING
+   ======================================== */
+
+.gantt_link_arrow {
+    border-color: #64748b !important;
+}
+
+.gantt_line_wrapper div {
+    background-color: #64748b !important;
+}
+
+/* ========================================
+   SCROLLBAR STYLING
+   ======================================== */
+
+.gantt_hor_scroll,
+.gantt_ver_scroll {
+    background-color: #f1f5f9 !important;
+}
+
+.gantt_hor_scroll::-webkit-scrollbar,
+.gantt_ver_scroll::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+}
+
+.gantt_hor_scroll::-webkit-scrollbar-thumb,
+.gantt_ver_scroll::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 4px;
+}
+
+.gantt_hor_scroll::-webkit-scrollbar-thumb:hover,
+.gantt_ver_scroll::-webkit-scrollbar-thumb:hover {
+    background-color: #94a3b8;
+}
+
+/* ========================================
+   TODAY MARKER
+   ======================================== */
+
+.gantt_marker {
+    background-color: #ef4444 !important;
+    opacity: 0.7;
+}
+
+.gantt_marker .gantt_marker_content {
+    color: #ef4444 !important;
+    font-weight: 600 !important;
+}
+
+/* ========================================
+   LIGHTBOX (Edit Dialog) STYLING
+   ======================================== */
+
+.gantt_cal_light {
+    border-radius: 8px !important;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+}
+
+.gantt_cal_ltitle {
+    background-color: #f8fafc !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.gantt_cal_ltext textarea,
+.gantt_cal_ltext input {
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 4px !important;
+    padding: 8px !important;
+}
+
+.gantt_cal_ltext textarea:focus,
+.gantt_cal_ltext input:focus {
+    border-color: #3b82f6 !important;
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+.gantt_btn_set {
+    border-radius: 6px !important;
+}
+
+.gantt_save_btn {
+    background-color: #10b981 !important;
+}
+
+.gantt_cancel_btn {
+    background-color: #64748b !important;
+}
+
+.gantt_delete_btn {
+    background-color: #ef4444 !important;
 }

@@ -9,11 +9,15 @@ import (
 )
 
 type GanttService struct {
-	ppicRepo *repository.PPICScheduleRepository
+	ppicRepo     *repository.PPICScheduleRepository
+	ppicLinkRepo *repository.PPICLinkRepository
 }
 
-func NewGanttService(ppicRepo *repository.PPICScheduleRepository) *GanttService {
-	return &GanttService{ppicRepo: ppicRepo}
+func NewGanttService(ppicRepo *repository.PPICScheduleRepository, ppicLinkRepo *repository.PPICLinkRepository) *GanttService {
+	return &GanttService{
+		ppicRepo:     ppicRepo,
+		ppicLinkRepo: ppicLinkRepo,
+	}
 }
 
 // CreatePPICSchedule creates a new PPIC schedule entry
@@ -53,21 +57,23 @@ func (s *GanttService) CreatePPICSchedule(req *models.CreatePPICScheduleRequest,
 		return nil, errors.New("NJO already exists in PPIC schedule")
 	}
 
-	// Validate machine assignments count (1-5)
-	if len(req.MachineAssignments) < 1 || len(req.MachineAssignments) > 5 {
-		return nil, errors.New("must have between 1 and 5 machine assignments")
+	// Validate machine assignments count (0-5)
+	if len(req.MachineAssignments) > 5 {
+		return nil, errors.New("cannot have more than 5 machine assignments")
 	}
 
-	// Validate unique sequences
-	sequences := make(map[int]bool)
-	for _, ma := range req.MachineAssignments {
-		if ma.Sequence < 1 || ma.Sequence > 5 {
-			return nil, errors.New("machine sequence must be between 1 and 5")
+	// Validate unique sequences if there are machine assignments
+	if len(req.MachineAssignments) > 0 {
+		sequences := make(map[int]bool)
+		for _, ma := range req.MachineAssignments {
+			if ma.Sequence < 1 || ma.Sequence > 5 {
+				return nil, errors.New("machine sequence must be between 1 and 5")
+			}
+			if sequences[ma.Sequence] {
+				return nil, errors.New("duplicate sequence numbers found")
+			}
+			sequences[ma.Sequence] = true
 		}
-		if sequences[ma.Sequence] {
-			return nil, errors.New("duplicate sequence numbers found")
-		}
-		sequences[ma.Sequence] = true
 	}
 
 	return s.ppicRepo.Create(req, createdBy, startDate, finishDate)
@@ -123,7 +129,35 @@ func (s *GanttService) UpdatePPICSchedule(id int64, req *models.UpdatePPICSchedu
 		return nil, errors.New("progress must be between 0 and 100")
 	}
 
-	return s.ppicRepo.Update(id, req, startDate, finishDate)
+	// Validate that the new dates don't conflict with predecessor tasks (if this task is a target of any links)
+	if startDate != nil {
+		if err := s.validateNoPredecessorConflict(id, *startDate); err != nil {
+			return nil, err
+		}
+	}
+
+	// Update the schedule
+	updated, err := s.ppicRepo.Update(id, req, startDate, finishDate)
+	if err != nil {
+		return nil, err
+	}
+
+	// If dates were updated, cascade the changes to dependent tasks
+	if startDate != nil || finishDate != nil {
+		// Get the updated schedule to use for cascading
+		scheduleAfterUpdate, err := s.ppicRepo.GetByID(id)
+		if err != nil {
+			return updated, nil // Return the update result even if cascade fails
+		}
+
+		// Cascade reschedule to all dependent tasks
+		if err := s.cascadeReschedule(scheduleAfterUpdate); err != nil {
+			// Log error but don't fail the update
+			fmt.Printf("Warning: Failed to cascade reschedule: %v\n", err)
+		}
+	}
+
+	return updated, nil
 }
 
 // DeletePPICSchedule deletes a PPIC schedule
@@ -177,9 +211,16 @@ func (s *GanttService) GetGanttChartData(filter models.GanttFilterRequest) (*mod
 		return nil, err
 	}
 
+	// Get all PPIC links
+	ppicLinks, err := s.ppicLinkRepo.GetAll()
+	if err != nil {
+		return nil, err
+	}
+
 	// Build response
 	response := &models.GanttChartResponse{
 		Machines: machines,
+		Links:    s.convertToGanttLinks(ppicLinks),
 		Summary:  *summary,
 		Filters:  s.buildFiltersApplied(filter),
 	}
@@ -232,6 +273,112 @@ func (s *GanttService) AddMachineAssignment(scheduleID int64, req *models.Create
 // RemoveMachineAssignment removes a machine from a schedule
 func (s *GanttService) RemoveMachineAssignment(assignmentID int64) error {
 	return s.ppicRepo.DeleteMachineAssignment(assignmentID)
+}
+
+// validateNoPredecessorConflict checks if the new start date conflicts with any predecessor tasks
+func (s *GanttService) validateNoPredecessorConflict(scheduleID int64, newStartDate time.Time) error {
+	// Get all links where this schedule is the target (predecessor links)
+	predecessorLinks, err := s.ppicLinkRepo.GetByTargetScheduleID(scheduleID)
+	if err != nil {
+		return fmt.Errorf("failed to get predecessor links: %w", err)
+	}
+
+	// If no predecessors, no conflict possible
+	if len(predecessorLinks) == 0 {
+		return nil
+	}
+
+	// Check each predecessor link
+	for _, link := range predecessorLinks {
+		// Only validate finish-to-start links
+		if link.LinkType != "0" {
+			continue
+		}
+
+		// Get the source (predecessor) schedule
+		sourceSchedule, err := s.ppicRepo.GetByID(link.SourceScheduleID)
+		if err != nil {
+			return fmt.Errorf("failed to get predecessor schedule %d: %w", link.SourceScheduleID, err)
+		}
+		if sourceSchedule == nil {
+			continue
+		}
+
+		// For finish-to-start: target must start after source finishes
+		// newStartDate must be > sourceSchedule.FinishDate
+		if newStartDate.Before(sourceSchedule.FinishDate) || newStartDate.Equal(sourceSchedule.FinishDate) {
+			return fmt.Errorf("task tidak bisa dimajuin ke tanggal %s karena terhubung dengan task '%s' yang selesai di tanggal %s. Task ini harus mulai minimal tanggal %s",
+				newStartDate.Format("2006-01-02"),
+				sourceSchedule.PartName,
+				sourceSchedule.FinishDate.Format("2006-01-02"),
+				sourceSchedule.FinishDate.AddDate(0, 0, 1).Format("2006-01-02"))
+		}
+	}
+
+	return nil
+}
+
+// cascadeReschedule recursively reschedules all dependent tasks when a source task is updated
+func (s *GanttService) cascadeReschedule(sourceSchedule *models.PPICSchedule) error {
+	// Get all links where this schedule is the source (tasks that depend on this one)
+	dependentLinks, err := s.ppicLinkRepo.GetBySourceScheduleID(sourceSchedule.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get dependent links: %w", err)
+	}
+
+	// If no dependent tasks, nothing to do
+	if len(dependentLinks) == 0 {
+		return nil
+	}
+
+	// For each dependent task, reschedule it
+	for _, link := range dependentLinks {
+		// Only handle finish-to-start links for now
+		if link.LinkType != "0" {
+			continue
+		}
+
+		// Get the target schedule
+		targetSchedule, err := s.ppicRepo.GetByID(link.TargetScheduleID)
+		if err != nil {
+			return fmt.Errorf("failed to get target schedule %d: %w", link.TargetScheduleID, err)
+		}
+		if targetSchedule == nil {
+			continue
+		}
+
+		// Calculate new dates for the target task
+		// For finish-to-start: target should start after source finishes
+		newStartDate := sourceSchedule.FinishDate.AddDate(0, 0, 1) // Day after source finishes
+
+		// Calculate task duration to maintain it
+		duration := targetSchedule.FinishDate.Sub(targetSchedule.StartDate)
+		newFinishDate := newStartDate.Add(duration)
+
+		// Update the target schedule
+		updateReq := &models.UpdatePPICScheduleRequest{
+			StartDate:  newStartDate.Format("2006-01-02"),
+			FinishDate: newFinishDate.Format("2006-01-02"),
+		}
+
+		_, err = s.ppicRepo.Update(targetSchedule.ID, updateReq, &newStartDate, &newFinishDate)
+		if err != nil {
+			return fmt.Errorf("failed to update dependent schedule %d: %w", targetSchedule.ID, err)
+		}
+
+		// Get the updated target schedule
+		updatedTarget, err := s.ppicRepo.GetByID(targetSchedule.ID)
+		if err != nil {
+			return fmt.Errorf("failed to get updated target schedule %d: %w", targetSchedule.ID, err)
+		}
+
+		// Recursively cascade to tasks that depend on this target
+		if err := s.cascadeReschedule(updatedTarget); err != nil {
+			return fmt.Errorf("failed to cascade reschedule for schedule %d: %w", updatedTarget.ID, err)
+		}
+	}
+
+	return nil
 }
 
 // Helper functions
@@ -371,6 +518,22 @@ func (s *GanttService) convertToGanttMachines(assignments []models.MachineAssign
 	}
 
 	return machines
+}
+
+func (s *GanttService) convertToGanttLinks(ppicLinks []models.PPICLink) []models.GanttLink {
+	var ganttLinks []models.GanttLink
+
+	for _, link := range ppicLinks {
+		ganttLink := models.GanttLink{
+			ID:     link.ID,
+			Source: fmt.Sprintf("task-%d", link.SourceScheduleID),
+			Target: fmt.Sprintf("task-%d", link.TargetScheduleID),
+			Type:   link.LinkType,
+		}
+		ganttLinks = append(ganttLinks, ganttLink)
+	}
+
+	return ganttLinks
 }
 
 // UpdateMachineAssignmentStatus updates the status of a machine assignment

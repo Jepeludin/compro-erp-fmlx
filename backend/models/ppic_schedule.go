@@ -74,7 +74,7 @@ type CreatePPICScheduleRequest struct {
 	StartDate          string                           `json:"start_date" binding:"required"`
 	FinishDate         string                           `json:"finish_date" binding:"required"`
 	PPICNotes          string                           `json:"ppic_notes"`
-	MachineAssignments []CreateMachineAssignmentRequest `json:"machine_assignments" binding:"required,min=1,max=5"`
+	MachineAssignments []CreateMachineAssignmentRequest `json:"machine_assignments" binding:"max=5"`
 }
 
 type CreateMachineAssignmentRequest struct {
@@ -100,6 +100,7 @@ type UpdatePPICScheduleRequest struct {
 
 type UpdateMachineAssignmentRequest struct {
 	ID          int64      `json:"id"`
+	MachineID   int64      `json:"machine_id"`
 	Sequence    int        `json:"sequence"`
 	TargetHours float64    `json:"target_hours"`
 	Status      string     `json:"status"`
@@ -121,6 +122,7 @@ type GanttFilterRequest struct {
 type GanttChartResponse struct {
 	Sections []GanttSection      `json:"sections"`
 	Machines []Machine           `json:"machines"`
+	Links    []GanttLink         `json:"links"`
 	Summary  GanttSummary        `json:"summary"`
 	Filters  GanttFiltersApplied `json:"filters_applied"`
 }
@@ -172,6 +174,13 @@ type GanttSummary struct {
 	MaterialNotReady int `json:"material_not_ready"`
 }
 
+type GanttLink struct {
+	ID     int64  `json:"id"`
+	Source string `json:"source"` // Format: "task-{schedule_id}"
+	Target string `json:"target"` // Format: "task-{schedule_id}"
+	Type   string `json:"type"`   // Link type (0, 1, 2, 3)
+}
+
 type GanttFiltersApplied struct {
 	StartDate *time.Time `json:"start_date"`
 	EndDate   *time.Time `json:"end_date"`
@@ -213,4 +222,20 @@ func GetPriorityColor(priority string) string {
 		return color
 	}
 	return "#6c757d" // Gray default
+}
+
+// PPICLink represents a dependency link between schedules
+type PPICLink struct {
+	ID               int64     `json:"id" gorm:"primaryKey"`
+	SourceScheduleID int64     `json:"source_schedule_id" gorm:"not null"`
+	TargetScheduleID int64     `json:"target_schedule_id" gorm:"not null"`
+	LinkType         string    `json:"link_type" gorm:"size:20;default:'0'"` // 0=finish-to-start, 1=start-to-start, 2=finish-to-finish, 3=start-to-finish
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+type CreatePPICLinkRequest struct {
+	SourceScheduleID int64  `json:"source_schedule_id" binding:"required"`
+	TargetScheduleID int64  `json:"target_schedule_id" binding:"required"`
+	LinkType         string `json:"link_type"`
 }

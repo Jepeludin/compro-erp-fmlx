@@ -11,10 +11,15 @@
         <label for="username">Username</label>
         <input type="text" id="username" v-model="username" :disabled="isLoading" placeholder="e.g., John Doe" />
       </div>
-      
+
       <div class="form-group userid-group">
         <label for="user_id">User ID</label>
         <input type="text" id="user_id" v-model="userId" :disabled="isLoading" :placeholder="isSignupMode ? 'e.g., PI0824.5001' : 'Enter your ID'" />
+      </div>
+
+      <div v-if="isSignupMode" class="form-group email-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" v-model="email" :disabled="isLoading" placeholder="e.g., user@example.com" />
       </div>
 
       <div class="form-group password-group">
@@ -49,6 +54,7 @@ import './LoginPage.css';
 const router = useRouter();
 const userId = ref('');
 const username = ref('');
+const email = ref('');
 const password = ref('');
 const isLoading = ref(false);
 const errorMessage = ref('');
@@ -77,6 +83,7 @@ const toggleMode = () => {
   successMessage.value = '';
   userId.value = '';
   username.value = '';
+  email.value = '';
   password.value = '';
 };
 
@@ -102,8 +109,14 @@ const handleLogin = async () => {
 };
 
 const handleSignup = async () => {
-  if (!username.value || !userId.value || !password.value) {
+  if (!username.value || !userId.value || !email.value || !password.value) {
     errorMessage.value = 'Semua field harus diisi';
+    return;
+  }
+  // Basic email validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email.value)) {
+    errorMessage.value = 'Email tidak valid';
     return;
   }
   isLoading.value = true;
@@ -111,9 +124,10 @@ const handleSignup = async () => {
     const response = await api.register({
       username: username.value,
       user_id: userId.value,
+      email: email.value,
       password: password.value,
       role: 'Guest',
-      operator: '[null]'
+      operator: ''
     });
     successMessage.value = `Akun berhasil dibuat!`;
     setTimeout(() => toggleMode(), 2000);

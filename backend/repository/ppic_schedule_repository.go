@@ -272,6 +272,12 @@ func (r *PPICScheduleRepository) GetWithFilters(filter models.GanttFilterRequest
 
 // Update updates a schedule
 func (r *PPICScheduleRepository) Update(id int64, req *models.UpdatePPICScheduleRequest, startDate, finishDate *time.Time) (*models.PPICSchedule, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
 	query := "UPDATE ppic_schedules SET updated_at = NOW()"
 	var args []interface{}
 	argNum := 1
@@ -325,19 +331,41 @@ func (r *PPICScheduleRepository) Update(id int64, req *models.UpdatePPICSchedule
 	query += fmt.Sprintf(" WHERE id = $%d AND deleted_at IS NULL", argNum)
 	args = append(args, id)
 
-	_, err := r.db.Exec(query, args...)
+	_, err = tx.Exec(query, args...)
 	if err != nil {
 		return nil, err
 	}
 
-	// Update machine assignments if provided
-	for _, ma := range req.MachineAssignments {
-		if ma.ID > 0 {
-			err = r.updateMachineAssignment(&ma)
+	// Handle machine assignments if provided
+	if len(req.MachineAssignments) > 0 {
+		// Delete all existing machine assignments for this schedule
+		_, err = tx.Exec("DELETE FROM machine_assignments WHERE schedule_id = $1", id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete old machine assignments: %w", err)
+		}
+
+		// Create new machine assignments
+		for _, ma := range req.MachineAssignments {
+			// Get machine info
+			var machineName, machineCode string
+			err := tx.QueryRow("SELECT machine_name, machine_code FROM machines WHERE id = $1", ma.MachineID).Scan(&machineName, &machineCode)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("machine not found: %w", err)
+			}
+
+			insertQuery := `
+				INSERT INTO machine_assignments (schedule_id, machine_id, sequence, target_hours, status, created_at, updated_at)
+				VALUES ($1, $2, $3, $4, 'pending', NOW(), NOW())
+			`
+			_, err = tx.Exec(insertQuery, id, ma.MachineID, ma.Sequence, ma.TargetHours)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create machine assignment: %w", err)
 			}
 		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
 	}
 
 	return r.GetByID(id)

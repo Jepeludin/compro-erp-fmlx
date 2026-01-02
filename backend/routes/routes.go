@@ -33,6 +33,7 @@ func SetupRoutes(
 	opPlanHandler *handlers.OperationPlanHandler,
 	gcodeHandler *handlers.GCodeHandler,
 	ganttHandler *handlers.GanttHandler,
+	ppicLinkHandler *handlers.PPICLinkHandler,
 	emailHandler *handlers.EmailHandler,
 	authService *services.AuthService,
 ) *RateLimiters {
@@ -130,6 +131,14 @@ func SetupRoutes(
 			ppic.POST("/:id/machines", ganttHandler.AddMachineAssignment)                               // Add machine
 			ppic.DELETE("/:id/machines/:assignment_id", ganttHandler.RemoveMachineAssignment)           // Remove machine
 			ppic.PUT("/:id/machines/:assignment_id/status", ganttHandler.UpdateMachineAssignmentStatus) // Update status
+		}
+
+		// PPIC Links routes (for Gantt chart dependencies/arrows)
+		ppicLinks := protected.Group("/ppic-links")
+		{
+			ppicLinks.GET("", ppicLinkHandler.GetAllPPICLinks)      // Get all links
+			ppicLinks.POST("", ppicLinkHandler.CreatePPICLink)      // Create link
+			ppicLinks.DELETE("/:id", ppicLinkHandler.DeletePPICLink) // Delete link
 		}
 
 		// Admin routes
