@@ -282,11 +282,32 @@ onMounted(async () => {
   };
 
   // ========================================
+  // CUSTOM LIGHTBOX SECTION FOR ORDER NUMBER
+  // ========================================
+  gantt.form_blocks["order_input"] = {
+    render: function(sns) {
+      return "<div class='gantt_cal_ltext'><input type='text' name='" + sns.name + "' style='width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;'></div>";
+    },
+    set_value: function(node, value, task, section) {
+      node.querySelector("input").value = value || "";
+    },
+    get_value: function(node, task, section) {
+      return node.querySelector("input").value;
+    },
+    focus: function(node) {
+      const input = node.querySelector("input");
+      input.focus();
+    }
+  };
+
+  // ========================================
   // LIGHTBOX CONFIGURATION
   // ========================================
   gantt.config.lightbox.sections = [
-    { name: "Order Number", height: 38, map_to: "order_number", type: "textarea", focus: true },
-    { name: "Part Name", height: 38, map_to: "text", type: "textarea" },
+    { name: "Order Number", height: 38, map_to: "order_number", type: "order_input", focus: true },
+    { name: "Part Name", height: 38, map_to: "text", type: "template", template: (obj) => {
+        return `<div class="gantt_cal_ltext" style="padding: 8px; background: #f5f5f5; border-radius: 4px;">${obj.text || 'New task'}</div>`;
+    }},
     { name: "Time Period", type: "time", map_to: "auto", time_format: ["%d", "%m", "%Y"] },
     { name: "Priority", height: 38, map_to: "priority", type: "select", options: [
         { key: "Low", label: "Low" },
@@ -300,6 +321,27 @@ onMounted(async () => {
     ]},
     { name: "Mesin", height: 38, map_to: "machine", type: "select", options: machines.value }
   ];
+
+  // ========================================
+  // EVENT: BEFORE LIGHTBOX CLOSE - VALIDATE PART NAME
+  // ========================================
+  gantt.attachEvent("onBeforeLightbox", (taskId) => {
+    // Store the original task text
+    const task = gantt.getTask(taskId);
+    if (!task._originalText) {
+      task._originalText = task.text;
+    }
+    return true;
+  });
+
+  // Prevent saving if Part Name is still "New task"
+  gantt.attachEvent("onLightboxSave", (id, task, isNew) => {
+    if (task.text === "New task" || !task.text || task.text.trim() === "") {
+      alert("Please enter a valid Order Number and wait for the Part Name to be fetched from Google Sheets.");
+      return false; // Prevent save
+    }
+    return true; // Allow save
+  });
 
   // ========================================
   // INITIALIZE GANTT
@@ -328,6 +370,62 @@ onMounted(async () => {
       });
     });
   }, 100);
+
+  // ========================================
+  // EVENT: LIGHTBOX CHANGE - AUTO-POPULATE PART NAME FROM BACKEND
+  // ========================================
+  gantt.attachEvent("onLightbox", (taskId) => {
+    // Add event listener to Order Number input
+    setTimeout(() => {
+      const orderInput = document.querySelector('input[name="Order Number"]');
+      if (orderInput) {
+        // Function to fetch part name from backend
+        const fetchPartName = async () => {
+          const orderNumber = orderInput.value.trim();
+
+          if (orderNumber) {
+            try {
+              // Call backend API to get Part Name
+              const response = await api.getPartNameByOrderNumber(orderNumber);
+
+              if (response && response.success && response.data && response.data.part_name) {
+                // Update the task object
+                const task = gantt.getTask(taskId);
+                task.text = response.data.part_name;
+
+                // Update the Part Name display in the lightbox
+                // Find all divs with class gantt_cal_ltext, the second one is Part Name (first is Order Number input wrapper)
+                const allDivs = document.querySelectorAll('.gantt_cal_ltext');
+                if (allDivs.length >= 2) {
+                  // allDivs[0] is Order Number input wrapper
+                  // allDivs[1] is Part Name display
+                  allDivs[1].textContent = response.data.part_name;
+                }
+              }
+            } catch (err) {
+              console.error('Error fetching Part Name:', err);
+              // Optionally show error to user
+              // alert('Failed to fetch Part Name for Order Number: ' + orderNumber);
+            }
+          }
+        };
+
+        // Prevent Enter key from closing/submitting the lightbox
+        orderInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+            // Trigger fetch when Enter is pressed
+            fetchPartName();
+            return false;
+          }
+        });
+
+        // Add blur event to fetch Part Name from backend
+        orderInput.addEventListener('blur', fetchPartName);
+      }
+    }, 100);
+  });
 
   // Fetch machines AFTER gantt init, before loading data
   await fetchMachines();

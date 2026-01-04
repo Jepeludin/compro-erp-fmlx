@@ -19,6 +19,37 @@ func NewAdminHandler(userRepo *repository.UserRepository) *AdminHandler {
 	}
 }
 
+// GetUsers - Get all active users (for approver selection, accessible by all authenticated users)
+func (h *AdminHandler) GetUsers(c *gin.Context) {
+	users, err := h.userRepo.GetAllUsers()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to retrieve users",
+		})
+		return
+	}
+
+	// Remove password and filter only active users (excluding Guest)
+	var usersResponse []gin.H
+	for _, user := range users {
+		if user.IsActive && user.Role != "Guest" {
+			usersResponse = append(usersResponse, gin.H{
+				"id":       user.ID,
+				"username": user.Username,
+				"email":    user.Email,
+				"user_id":  user.UserID,
+				"role":     user.Role,
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"users":   usersResponse,
+		"total":   len(usersResponse),
+	})
+}
+
 // GetAllUsers - Get all users (Admin only)
 func (h *AdminHandler) GetAllUsers(c *gin.Context) {
 	users, err := h.userRepo.GetAllUsers()
@@ -66,6 +97,7 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		Password *string `json:"password,omitempty"`
 		Role     *string `json:"role,omitempty"`
 		IsActive *bool   `json:"is_active,omitempty"`
+		Email    string  `json:"email" binding:"required,email"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {

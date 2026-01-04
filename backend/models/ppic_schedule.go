@@ -42,7 +42,7 @@ type PPICSchedule struct {
 	CreatedBy          int64               `json:"created_by"`
 	CreatedAt          time.Time           `json:"created_at"`
 	UpdatedAt          time.Time           `json:"updated_at"`
-	MachineAssignments []MachineAssignment `json:"machine_assignments"`
+	MachineAssignments []MachineAssignment `gorm:"-" json:"machine_assignments"`
 }
 
 // MachineAssignment represents a machine assigned to a schedule

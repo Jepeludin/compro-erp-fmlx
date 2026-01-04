@@ -65,6 +65,10 @@ func AutoMigrate(db *gorm.DB) {
 		&models.OperationPlan{},
 		&models.OperationPlanApproval{},
 		&models.GCodeFile{},
+		&models.PEMOperationPlan{},
+		&models.OperationPlanStep{},
+		&models.PEMApproval{},
+		&models.ToolpatherFile{},
 	)
 
 	if err != nil {

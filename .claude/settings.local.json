@@ -5,7 +5,17 @@
       "Bash(netstat:*)",
       "Bash(findstr:*)",
       "Bash(npm run dev:*)",
-      "Bash(go build:*)"
+      "Bash(go build:*)",
+      "Bash(taskkill /F /PID 3028)",
+      "Bash(taskkill //F //PID 3028)",
+      "Bash(start ganttpro-backend.exe)",
+      "Bash(xargs:*)",
+      "Bash(taskkill:*)",
+      "Bash(timeout /t 3)",
+      "Bash(tasklist:*)",
+      "Bash(dir:*)",
+      "Bash(ping:*)",
+      "Bash(npm run build:*)"
     ]
   }
 }

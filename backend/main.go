@@ -48,8 +48,12 @@ func main() {
 	tokenBlacklistRepo := repository.NewTokenBlacklistRepository(db)
 	opPlanRepo := repository.NewOperationPlanRepository(db)
 	gcodeRepo := repository.NewGCodeFileRepository(db)
+	pemPlanRepo := repository.NewPEMOperationPlanRepository(db)
+	toolpatherFileRepo := repository.NewToolpatherFileRepository(db)
 
 	uploadPath := "./uploads/gcodes"
+	pemUploadPath := "./uploads/operation-plan-images"
+	toolpatherUploadPath := "./uploads/toolpather-files"
 
 	// Initialize services
 	authService := services.NewAuthService(userRepo, tokenBlacklistRepo, cfg)
@@ -58,6 +62,8 @@ func main() {
 	gcodeService := services.NewGCodeService(gcodeRepo, opPlanRepo, uploadPath)
 	ganttService := services.NewGanttService(ppicScheduleRepo, ppicLinkRepo)
 	ppicLinkService := services.NewPPICLinkService(ppicLinkRepo, ppicScheduleRepo)
+	pemPlanService := services.NewPEMOperationPlanService(pemPlanRepo, userRepo, ppicScheduleRepo, emailService, pemUploadPath)
+	toolpatherFileService := services.NewToolpatherFileService(toolpatherFileRepo, userRepo, toolpatherUploadPath)
 
 	// Initialize and start cleanup service (cleans expired tokens every hour)
 	cleanupService := services.NewCleanupService(tokenBlacklistRepo, services.DefaultCleanupConfig())
@@ -81,10 +87,16 @@ func main() {
 	ganttHandler := handlers.NewGanttHandler(ganttService)
 	ppicLinkHandler := handlers.NewPPICLinkHandler(ppicLinkService)
 	emailHandler := handlers.NewEmailHandler(emailService, opPlanRepo, userRepo)
+	googleSheetsHandler := handlers.NewGoogleSheetsHandler()
+	pemPlanHandler := handlers.NewPEMOperationPlanHandler(pemPlanService)
+	toolpatherFileHandler := handlers.NewToolpatherFileHandler(toolpatherFileService)
 
 	// Setup Gin router
 	router := gin.Default()
 	router.Use(middleware.CORS(cfg))
+
+	// Serve static files (uploaded images, etc.)
+	router.Static("/uploads", "./uploads")
 
 	// Setup routes and get rate limiters for graceful shutdown
 	rateLimiters := routes.SetupRoutes(
@@ -98,6 +110,9 @@ func main() {
 		ganttHandler,
 		ppicLinkHandler,
 		emailHandler,
+		googleSheetsHandler,
+		pemPlanHandler,
+		toolpatherFileHandler,
 		authService,
 	)
 

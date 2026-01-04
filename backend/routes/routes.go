@@ -35,6 +35,9 @@ func SetupRoutes(
 	ganttHandler *handlers.GanttHandler,
 	ppicLinkHandler *handlers.PPICLinkHandler,
 	emailHandler *handlers.EmailHandler,
+	googleSheetsHandler *handlers.GoogleSheetsHandler,
+	pemPlanHandler *handlers.PEMOperationPlanHandler,
+	toolpatherFileHandler *handlers.ToolpatherFileHandler,
 	authService *services.AuthService,
 ) *RateLimiters {
 	// Initialize rate limiters
@@ -139,6 +142,57 @@ func SetupRoutes(
 			ppicLinks.GET("", ppicLinkHandler.GetAllPPICLinks)      // Get all links
 			ppicLinks.POST("", ppicLinkHandler.CreatePPICLink)      // Create link
 			ppicLinks.DELETE("/:id", ppicLinkHandler.DeletePPICLink) // Delete link
+		}
+
+		// Google Sheets routes
+		googleSheets := protected.Group("/google-sheets")
+		{
+			googleSheets.GET("/part-name/:orderNumber", googleSheetsHandler.GetPartNameByOrderNumber) // Get part name by order number
+			googleSheets.GET("/all-data", googleSheetsHandler.GetAllSheetData)                        // Get all Google Sheets data
+		}
+
+		// Users routes (for approver selection - accessible by all authenticated users)
+		protected.GET("/users", adminHandler.GetUsers) // Get active users for approver selection
+
+		// PEM Operation Plans routes
+		pemPlans := protected.Group("/pem-operation-plans")
+		{
+			pemPlans.GET("", pemPlanHandler.GetAllPEMPlans)                           // Get all PEM plans
+			pemPlans.GET("/:id", pemPlanHandler.GetPEMPlan)                           // Get single PEM plan
+			pemPlans.POST("", pemPlanHandler.CreatePEMPlan)                           // Create PEM plan
+			pemPlans.PUT("/:id", pemPlanHandler.UpdatePEMPlan)                        // Update PEM plan
+			pemPlans.DELETE("/:id", pemPlanHandler.DeletePEMPlan)                     // Delete PEM plan
+
+			// Steps management
+			pemPlans.POST("/:id/steps", pemPlanHandler.AddPlanStep)                  // Add step to plan
+			pemPlans.PUT("/steps/:step_id", pemPlanHandler.UpdatePlanStep)           // Update step
+			pemPlans.DELETE("/steps/:step_id", pemPlanHandler.DeletePlanStep)        // Delete step
+
+			// Image upload
+			pemPlans.POST("/steps/:step_id/image", pemPlanHandler.UploadStepImage)   // Upload step image
+			pemPlans.DELETE("/steps/:step_id/image", pemPlanHandler.DeleteStepImage) // Delete step image
+
+			// Approval workflow
+			pemPlans.POST("/:id/assign-approvers", pemPlanHandler.AssignApprovers)   // Assign all 5 approvers
+			pemPlans.POST("/:id/submit", pemPlanHandler.SubmitPlanForApproval)       // Submit for approval
+			pemPlans.POST("/:id/approve", pemPlanHandler.ApprovePlan)                // Approve plan (requires ?role= param)
+			pemPlans.POST("/:id/reject", pemPlanHandler.RejectPlan)                  // Reject plan (requires ?role= param)
+
+			// Filter by PPIC schedule
+			pemPlans.GET("/ppic-schedule/:schedule_id", pemPlanHandler.GetPlansByPPICSchedule) // Get plans by PPIC schedule
+			pemPlans.GET("/pending-approvals", pemPlanHandler.GetPendingApprovals)   // Get pending approvals for current user
+		}
+
+		// Toolpather File Upload routes
+		toolpatherFiles := protected.Group("/toolpather-files")
+		{
+			toolpatherFiles.POST("/upload", toolpatherFileHandler.UploadFiles)                       // Upload multiple .txt files
+			toolpatherFiles.GET("", toolpatherFileHandler.GetAllFiles)                               // Get all files with filters
+			toolpatherFiles.GET("/my-files", toolpatherFileHandler.GetMyFiles)                       // Get current user's files
+			toolpatherFiles.GET("/:id", toolpatherFileHandler.GetFileByID)                           // Get single file
+			toolpatherFiles.GET("/order/:orderNumber", toolpatherFileHandler.GetFilesByOrderNumber)  // Get files by order number
+			toolpatherFiles.GET("/:id/download", toolpatherFileHandler.DownloadFile)                 // Download file
+			toolpatherFiles.DELETE("/:id", toolpatherFileHandler.DeleteFile)                         // Delete file
 		}
 
 		// Admin routes

@@ -8,6 +8,9 @@ import AdminSchedule from '../components/Admin/AdminSchedule.vue';
 import api from '../services/api.js';
 import PPIC from '../components/PPIC/ppic.vue';
 import TimeTrack from '../components/TimeTrack/TimeTrack.vue';
+import PEMPage from '../components/PEM/PEMPage.vue';
+import ToolpatherPage from '../components/Toolpather/ToolpatherPage.vue';
+import DatabasePage from '../components/DatabasePage.vue';
 
 import GanttchartTest from '../components/Ganttchart-Test.vue';
 
@@ -50,13 +53,13 @@ const routes = [
   {
     path: '/toolpather',
     name: 'Toolpather',
-    component: () => import('../components/Dashboard.vue'),
+    component: ToolpatherPage,
     meta: { requiresAuth: true, allowedRoles: ['Admin', 'Toolpather'] }
   },
   {
     path: '/pem',
     name: 'PEM',
-    component: () => import('../components/Dashboard.vue'),
+    component: PEMPage,
     meta: { requiresAuth: true, allowedRoles: ['Admin', 'Toolpather', 'PEM', 'QC', 'Engineering'] }
   },
   {
@@ -91,7 +94,7 @@ const routes = [
   {
     path: '/database',
     name: 'Database',
-    component: () => import('../components/Dashboard.vue'),
+    component: DatabasePage,
     meta: { requiresAuth: true, allowedRoles: ['Admin', 'PPIC', 'Toolpather', 'PEM', 'QC', 'Engineering', 'Guest'] }
   },
   {

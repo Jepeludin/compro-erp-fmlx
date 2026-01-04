@@ -45,7 +45,11 @@ class ApiService {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Request failed');
+        // Include details from backend if available
+        const errorMessage = data.details
+          ? `${data.error}: ${data.details}`
+          : (data.error || 'Request failed');
+        throw new Error(errorMessage);
       }
 
       return data;
@@ -105,6 +109,14 @@ class ApiService {
   // Admin endpoints
   async getAllUsers() {
     return this.request('/admin/users', {
+      method: 'GET',
+      auth: true,
+    });
+  }
+
+  // Get users for approver selection (accessible by all authenticated users)
+  async getUsers() {
+    return this.request('/users', {
       method: 'GET',
       auth: true,
     });
@@ -302,6 +314,218 @@ class ApiService {
   async getAllPPICLinks() {
     return this.request('/ppic-links', {
       method: 'GET',
+      auth: true,
+    });
+  }
+
+  // Google Sheets endpoints
+  async getPartNameByOrderNumber(orderNumber) {
+    return this.request(`/google-sheets/part-name/${encodeURIComponent(orderNumber)}`, {
+      method: 'GET',
+      auth: true,
+    });
+  }
+
+  async getAllGoogleSheetsData() {
+    return this.request('/google-sheets/all-data', {
+      method: 'GET',
+      auth: true,
+    });
+  }
+
+  // PEM Operation Plan endpoints
+  async createPEMOperationPlan(planData) {
+    return this.request('/pem-operation-plans', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify(planData),
+    });
+  }
+
+  async getAllPEMOperationPlans(filters = {}) {
+    const params = new URLSearchParams(filters).toString();
+    const endpoint = params ? `/pem-operation-plans?${params}` : '/pem-operation-plans';
+    return this.request(endpoint, {
+      method: 'GET',
+      auth: true,
+    });
+  }
+
+  async getPEMOperationPlan(planId) {
+    return this.request(`/pem-operation-plans/${planId}`, {
+      method: 'GET',
+      auth: true,
+    });
+  }
+
+  async updatePEMOperationPlan(planId, updates) {
+    return this.request(`/pem-operation-plans/${planId}`, {
+      method: 'PUT',
+      auth: true,
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async deletePEMOperationPlan(planId) {
+    return this.request(`/pem-operation-plans/${planId}`, {
+      method: 'DELETE',
+      auth: true,
+    });
+  }
+
+  async addOperationPlanStep(planId, stepData) {
+    return this.request(`/pem-operation-plans/${planId}/steps`, {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify(stepData),
+    });
+  }
+
+  async updateOperationPlanStep(stepId, updates) {
+    return this.request(`/pem-operation-plans/steps/${stepId}`, {
+      method: 'PUT',
+      auth: true,
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async deleteOperationPlanStep(stepId) {
+    return this.request(`/pem-operation-plans/steps/${stepId}`, {
+      method: 'DELETE',
+      auth: true,
+    });
+  }
+
+  async uploadStepImage(stepId, formData) {
+    const url = `${this.baseURL}/pem-operation-plans/steps/${stepId}/image`;
+    const token = this.getToken();
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        // Don't set Content-Type, browser will set it with boundary for multipart
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || 'Upload failed');
+    }
+    return data;
+  }
+
+  async deleteStepImage(stepId) {
+    return this.request(`/pem-operation-plans/steps/${stepId}/image`, {
+      method: 'DELETE',
+      auth: true,
+    });
+  }
+
+  async assignPEMApprovers(planId, approvers) {
+    return this.request(`/pem-operation-plans/${planId}/assign-approvers`, {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify({ approvers }),
+    });
+  }
+
+  async submitPEMOperationPlan(planId) {
+    return this.request(`/pem-operation-plans/${planId}/submit`, {
+      method: 'POST',
+      auth: true,
+    });
+  }
+
+  async approvePEMOperationPlan(planId, role, comments = '') {
+    return this.request(`/pem-operation-plans/${planId}/approve?role=${encodeURIComponent(role)}`, {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify({ comments }),
+    });
+  }
+
+  async rejectPEMOperationPlan(planId, role, comments = '') {
+    return this.request(`/pem-operation-plans/${planId}/reject?role=${encodeURIComponent(role)}`, {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify({ comments }),
+    });
+  }
+
+  async getPEMPlansByPPICSchedule(scheduleId) {
+    return this.request(`/pem-operation-plans/ppic-schedule/${scheduleId}`, {
+      method: 'GET',
+      auth: true,
+    });
+  }
+
+  async getPendingPEMApprovals() {
+    return this.request('/pem-operation-plans/pending-approvals', {
+      method: 'GET',
+      auth: true,
+    });
+  }
+
+  // Toolpather File Upload endpoints
+  async uploadToolpatherFiles(formData) {
+    const url = `${this.baseURL}/toolpather-files/upload`;
+    const token = this.getToken();
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        // Don't set Content-Type, browser will set it with boundary for multipart
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || 'Upload failed');
+    }
+    return data;
+  }
+
+  async getAllToolpatherFiles(filters = {}) {
+    const params = new URLSearchParams(filters).toString();
+    const endpoint = params ? `/toolpather-files?${params}` : '/toolpather-files';
+    return this.request(endpoint, {
+      method: 'GET',
+      auth: true,
+    });
+  }
+
+  async getMyToolpatherFiles() {
+    return this.request('/toolpather-files/my-files', {
+      method: 'GET',
+      auth: true,
+    });
+  }
+
+  async getToolpatherFile(id) {
+    return this.request(`/toolpather-files/${id}`, {
+      method: 'GET',
+      auth: true,
+    });
+  }
+
+  async getFilesByOrderNumber(orderNumber) {
+    return this.request(`/toolpather-files/order/${encodeURIComponent(orderNumber)}`, {
+      method: 'GET',
+      auth: true,
+    });
+  }
+
+  getToolpatherFileDownloadUrl(id) {
+    return `${this.baseURL}/toolpather-files/${id}/download`;
+  }
+
+  async deleteToolpatherFile(id) {
+    return this.request(`/toolpather-files/${id}`, {
+      method: 'DELETE',
       auth: true,
     });
   }
