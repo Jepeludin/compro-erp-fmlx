@@ -16,7 +16,12 @@
       "Bash(dir:*)",
       "Bash(ping:*)",
       "Bash(npm run build:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(ls:*)",
+      "Bash(for:*)",
+      "Bash(do wc -l \"$file\")",
+      "Bash(done)",
+      "Bash(del QUICKSTART.md QUICKSTART_SIGNUP.md API_TESTING.md DASHBOARD_FEATURE.md JWT_CONFIGURATION.md POSTGRES_SETUP.md PANDUAN_MIGRASI_DATABASE.md QUICK_MIGRATION_GUIDE.md NETWORK_ACCESS_GUIDE.md NETWORK_FIX.md SIGNUP_FEATURE.md STRUKTUR_USER.md SUMMARY_JWT_UPDATE.md FILE_MIGRATION_SUMMARY.md)"
     ]
   }
 }
