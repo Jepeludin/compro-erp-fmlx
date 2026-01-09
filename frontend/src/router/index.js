@@ -8,6 +8,7 @@ import AdminSchedule from '../components/Admin/AdminSchedule.vue';
 import api from '../services/api.js';
 import PPIC from '../components/PPIC/ppic.vue';
 import TimeTrack from '../components/TimeTrack/TimeTrack.vue';
+import MachineDetail from '../components/TimeTrack/MachineDetail.vue';
 import PEMPage from '../components/PEM/PEMPage.vue';
 import ToolpatherPage from '../components/Toolpather/ToolpatherPage.vue';
 import DatabasePage from '../components/DatabasePage.vue';
@@ -101,6 +102,12 @@ const routes = [
     path: '/timetrack',
     name: 'TimeTrack',
     component: TimeTrack,
+    meta: { requiresAuth: true, allowedRoles: ['Admin', 'PPIC', 'Toolpather', 'PEM', 'QC', 'Engineering', 'Guest'] }
+  },
+  {
+    path: '/timetrack/machine/:id',
+    name: 'MachineDetail',
+    component: MachineDetail,
     meta: { requiresAuth: true, allowedRoles: ['Admin', 'PPIC', 'Toolpather', 'PEM', 'QC', 'Engineering', 'Guest'] }
   },
   {

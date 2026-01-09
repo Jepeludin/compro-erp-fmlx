@@ -40,7 +40,7 @@
           class="machine-card"
         >
           <div class="machine-header">
-            <h3 class="machine-name">{{ machine.machine_name }}</h3>
+            <h3 class="machine-name" @click="goToMachineDetail(machine.id)">{{ machine.machine_name }}</h3>
             <span class="job-count">{{ machine.schedules.length }} Jobs</span>
           </div>
 
@@ -218,6 +218,10 @@ const getStatusIndicatorClass = (schedule) => {
 
 const goBack = () => {
   router.push('/dashboard');
+};
+
+const goToMachineDetail = (machineId) => {
+  router.push(`/timetrack/machine/${machineId}`);
 };
 
 // Lifecycle

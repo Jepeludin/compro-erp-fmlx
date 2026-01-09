@@ -1,52 +1,89 @@
 # GanttPro Backend - Golang API
 
-Backend API untuk aplikasi GanttPro yang dibangun dengan Golang menggunakan Gin framework.
+Backend API untuk aplikasi GanttPro ERP yang dibangun dengan Golang menggunakan Gin framework.
 
 ## 🚀 Fitur
 
 - ✅ Authentication dengan JWT
 - ✅ Password hashing dengan bcrypt
-- ✅ Database support (MySQL & PostgreSQL)
+- ✅ Database PostgreSQL dengan migration support
 - ✅ CORS middleware
 - ✅ Clean architecture dengan separation of concerns
 - ✅ Environment-based configuration
-- ✅ Auto database migration
+- ✅ PPIC Gantt Chart scheduling
+- ✅ Machine assignments & dependencies
+- ✅ Role-based access control
 
 ## 📁 Struktur Project
 
 ```
 backend/
-├── config/           # Konfigurasi aplikasi
-├── database/         # Database connection & migration
-├── handlers/         # HTTP request handlers
-├── middleware/       # Middleware (CORS, Auth, dll)
-├── models/           # Database models
-├── repository/       # Database operations
-├── routes/           # Route definitions
-├── services/         # Business logic
-├── utils/            # Utility functions
-├── .env.example      # Contoh environment variables
-├── .gitignore        # Git ignore file
-├── go.mod            # Go module dependencies
-└── main.go           # Entry point aplikasi
+├── config/              # Konfigurasi aplikasi
+├── database/            # Database connection & migration
+│   └── migrations/      # SQL migration files
+├── handlers/            # HTTP request handlers
+├── middleware/          # Middleware (CORS, Auth, Role, dll)
+├── models/              # Database models & structs
+├── repository/          # Database operations layer
+├── routes/              # Route definitions
+├── services/            # Business logic layer
+├── utils/               # Utility functions
+├── testing/             # Unit tests
+├── uploads/             # Upload directory
+├── .env                 # Environment variables (jangan commit!)
+├── setup_database.ps1   # Auto setup script (Windows)
+├── QUICK_START.md       # Panduan cepat setup database
+├── SETUP_DATABASE.md    # Dokumentasi lengkap database setup
+├── go.mod               # Go module dependencies
+└── main.go              # Entry point aplikasi
 ```
 
-## 🛠️ Setup dan Instalasi
+## ⚡ Quick Start (Setup di Laptop Baru)
+
+**Jika Anda baru pindah ke laptop baru dan database belum di-setup:**
+
+### Cara Tercepat (Windows):
+
+```powershell
+# 1. Masuk ke folder backend
+cd C:\Jemmy\compro\compro-erp-fmlx\backend
+
+# 2. Jalankan script setup otomatis
+.\setup_database.ps1
+
+# 3. Jalankan backend
+go run main.go
+```
+
+Script akan otomatis:
+- ✓ Test koneksi PostgreSQL
+- ✓ Buat database baru
+- ✓ Jalankan semua migration
+- ✓ Insert data default (admin user & machines)
+- ✓ Update file .env
+
+**Lihat [QUICK_START.md](QUICK_START.md) untuk detail lengkap!**
+
+## 🛠️ Setup Manual
 
 ### Prerequisites
 
 - Go 1.21 atau lebih tinggi
-- MySQL atau PostgreSQL
+- PostgreSQL 12 atau lebih tinggi
 - Git
 
 ### Langkah Instalasi
 
-1. **Clone atau masuk ke direktori backend:**
+1. **Masuk ke direktori backend:**
    ```bash
    cd backend
    ```
 
-2. **Copy file environment:**
+2. **Setup Database:**
+   
+   Lihat dokumentasi lengkap di [SETUP_DATABASE.md](SETUP_DATABASE.md)
+   
+   Atau jalankan quick setup:
    ```bash
    # Windows PowerShell
    Copy-Item .env.example .env

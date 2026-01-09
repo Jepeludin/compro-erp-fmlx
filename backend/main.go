@@ -122,18 +122,19 @@ func main() {
 	})
 
 	// Create HTTP server
+	// Bind to 0.0.0.0 to allow access from other PCs on local network
 	srv := &http.Server{
-		Addr:         ":" + cfg.Port,
+		Addr:         "0.0.0.0:" + cfg.Port,
 		Handler:      router,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  60 * time.Second, // Increased for file uploads
+		WriteTimeout: 60 * time.Second, // Increased for file uploads
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Start server in a goroutine
 	go func() {
 		log.Printf("Server starting on port %s", cfg.Port)
-		
+
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start server: %v", err)
 		}

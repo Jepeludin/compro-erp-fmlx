@@ -238,7 +238,7 @@ onMounted(() => {
 <style scoped>
 .database-wrapper {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #f3f4f6;
   display: flex;
   flex-direction: column;
 }
@@ -265,7 +265,7 @@ onMounted(() => {
 }
 
 .logo {
-  color: white;
+  color: rgb(0, 0, 0);
   font-size: 1.75rem;
   font-weight: 700;
   margin: 0;
@@ -277,7 +277,7 @@ onMounted(() => {
 }
 
 .page-title {
-  color: white;
+  color: rgb(0, 0, 0);
   font-size: 1.25rem;
   font-weight: 500;
   margin: 0;
@@ -288,10 +288,10 @@ onMounted(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.6rem 1.2rem;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(38, 32, 32, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 8px;
-  color: white;
+  color: rgb(0, 0, 0);
   font-size: 0.95rem;
   cursor: pointer;
   transition: all 0.3s;
